@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">JUST GOLD / ADMIN</p>
+      <h1>Product Studio</h1>
+      <p class="subtitle">Create, style, and publish new pieces with rich media in minutes.</p>
+    </div>
+    <div class="hero-chip">
+      <span>Media-ready</span>
+      <strong>Multi-image uploads</strong>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <form id="productForm" enctype="multipart/form-data">
+        <div class="panel-section">
+          <h2>Product Information</h2>
+          <label class="field">
+            <span>Product Title</span>
+            <input type="text" name="name" placeholder="Gold Cascade Necklace" required>
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea name="description" placeholder="Describe materials, craftsmanship, and care."></textarea>
+          </label>
+
+          <div class="grid-2">
+            <label class="field">
+              <span>Base Price</span>
+              <input type="number" name="base_price" placeholder="Base Price" required>
+            </label>
+            <label class="field">
+              <span>Category</span>
+              <select id="categorySelect"></select>
+            </label>
+            <label class="field">
+              <span>Subcategory</span>
+              <select name="subcategory_id" id="subcategorySelect"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-head">
+            <h2>Gallery</h2>
+            <span class="meta">Max 6 images</span>
+          </div>
+          <div class="upload-area">
+            <input type="file" name="gallery" id="galleryInput" multiple accept="image/*">
+            <div>
+              <h3>Drop or select images</h3>
+              <p>High-res photos look best. You can reorder after upload.</p>
+              <span id="galleryCounter" class="counter">0 / 6 selected</span>
+            </div>
+          </div>
+          <div id="galleryPreview" class="preview-grid"></div>
+
+          <div class="section-head">
+            <h2>Product Video</h2>
+            <span class="meta">MP4, optional</span>
+          </div>
+          <label class="field">
+            <input type="file" name="video" id="videoInput" accept="video/mp4">
+          </label>
+          <p id="videoMeta" class="meta"></p>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-head">
+            <h2>Color Variants</h2>
+            <button type="button" class="ghost" onclick="addVariant()">Add Color</button>
+          </div>
+          <div id="variants" class="variant-list"></div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="submitBtn">Create Product</button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="panel panel-alt">
+      <div class="panel-section">
+        <h2>Products</h2>
+        <div id="productList" class="product-list"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
