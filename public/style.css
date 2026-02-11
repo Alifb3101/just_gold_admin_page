@@ -229,6 +229,57 @@ textarea {
   cursor: pointer;
 }
 
+.variant-image-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: #fdfbf7;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px dashed var(--border);
+}
+
+.variant-image-label span {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.variant-image-label input {
+  cursor: pointer;
+}
+
+.variant-image-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  border-radius: 10px;
+  background: #fdfbf7;
+  position: relative;
+}
+
+.variant-image-preview img {
+  max-width: 100%;
+  max-height: 100px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.remove-img {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
 button {
   font-family: inherit;
 }
@@ -287,4 +338,406 @@ button {
   .upload-area {
     grid-template-columns: 1fr;
   }
+}
+
+/* Variant Type Input */
+.variant input.variant-type {
+  background: #fef9f0;
+  border-color: rgba(199, 119, 44, 0.3);
+}
+
+.variant input.variant-type::placeholder {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* Secondary Image Label */
+.variant .variant-image-label:nth-of-type(2) {
+  background: #f9f5ee;
+  border-style: dotted;
+}
+
+/* =========================
+   EDIT MODAL
+========================= */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(31, 28, 24, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow-y: auto;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: 0 30px 60px rgba(35, 24, 16, 0.25);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(-20px);
+  transition: transform 0.3s;
+}
+
+.modal-overlay.active .modal {
+  transform: translateY(0);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(120deg, #fff1d2 0%, #f6ddbf 100%);
+}
+
+.modal-header h2 {
+  font-family: "Unbounded", sans-serif;
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: var(--muted);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(31, 28, 24, 0.1);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  max-height: calc(90vh - 160px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-section {
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.modal-section h3 {
+  font-family: "Unbounded", sans-serif;
+  font-size: 1rem;
+  margin: 0 0 16px;
+  color: var(--accent-dark);
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  background: #fffaf4;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff7ec;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(199, 119, 44, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(199, 119, 44, 0.35);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+  background: rgba(31, 28, 24, 0.05);
+}
+
+/* Media Grid */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.media-tile {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: #fff;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+.media-tile img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+}
+
+.media-tile.marked-for-deletion {
+  opacity: 0.4;
+  border-color: #e74c3c;
+}
+
+.media-tile.marked-for-deletion::after {
+  content: "Will be deleted";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #e74c3c;
+  color: white;
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 4px;
+}
+
+.delete-media-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+
+.delete-media-btn:hover {
+  transform: scale(1.1);
+}
+
+.marked-for-deletion .delete-media-btn {
+  background: rgba(46, 204, 113, 0.9);
+}
+
+/* Edit Variant Styles */
+.edit-variant {
+  position: relative;
+  border-left: 4px solid var(--accent);
+}
+
+.edit-variant.marked-for-deletion {
+  opacity: 0.5;
+  border-left-color: #e74c3c;
+  background: #fef5f5;
+}
+
+.delete-variant-btn {
+  background: #fce4e1;
+  color: #c0392b;
+  border: 1px solid rgba(192, 57, 43, 0.2);
+}
+
+.edit-variant.marked-for-deletion .delete-variant-btn {
+  background: #e8f8f5;
+  color: #27ae60;
+  border-color: rgba(39, 174, 96, 0.2);
+}
+
+.new-variant {
+  border-left: 4px solid #27ae60;
+  background: #f0fff4;
+}
+
+.new-variant-badge {
+  position: absolute;
+  top: -8px;
+  left: 10px;
+  background: #27ae60;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+}
+
+.variant-current-images {
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 10px;
+  background: #faf8f5;
+  border-radius: 10px;
+}
+
+.current-img {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.current-img img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.current-img span {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Product Actions */
+.product-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.product-item .edit-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.product-item .edit-btn:hover {
+  background: var(--accent-dark);
+}
+
+.product-item .delete-btn {
+  background: #f2d6c1;
+  color: var(--accent-dark);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.product-item .delete-btn:hover {
+  background: #fce4e1;
+  color: #c0392b;
+}
+
+/* Compact Upload Area */
+.upload-area.compact {
+  padding: 14px;
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+
+.upload-area.compact p {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.status-line {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.product-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* Modal Scrollbar Styling */
+.modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: #f5f0e8;
+  border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dark);
+}
+
+/* Button Loading State */
+.edit-btn:disabled,
+.delete-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Variant Scroll Indicator */
+.variant-list {
+  max-height: none;
+  overflow: visible;
 }

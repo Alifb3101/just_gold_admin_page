@@ -39,6 +39,31 @@
             <textarea name="description" placeholder="Describe materials, craftsmanship, and care."></textarea>
           </label>
 
+          <label class="field">
+            <span>How to Apply</span>
+            <textarea name="how_to_apply" placeholder="Explain how to use or apply this product."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Benefits</span>
+            <textarea name="benefits" placeholder="List the key benefits."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Key Features</span>
+            <textarea name="key_features" placeholder="Highlight standout features."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Ingredients</span>
+            <textarea name="ingredients" placeholder="List ingredients or materials."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Product Model No</span>
+            <input type="text" name="product_model_no" placeholder="e.g., SKG-2026-001" required>
+          </label>
+
           <div class="grid-2">
             <label class="field">
               <span>Base Price</span>
@@ -53,6 +78,7 @@
               <select name="subcategory_id" id="subcategorySelect"></select>
             </label>
           </div>
+          <p id="categoryStatus" class="meta status-line">Loading categories…</p>
         </div>
 
         <div class="panel-section">
@@ -97,10 +123,110 @@
     <aside class="panel panel-alt">
       <div class="panel-section">
         <h2>Products</h2>
+        <p id="productListStatus" class="meta status-line">Loading products…</p>
         <div id="productList" class="product-list"></div>
       </div>
     </aside>
   </main>
+</div>
+
+<!-- Edit Product Modal -->
+<div id="editModal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit Product</h2>
+      <button type="button" class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <form id="editProductForm" enctype="multipart/form-data">
+      <input type="hidden" id="editProductId" name="productId">
+      
+      <div class="modal-body">
+        <div class="modal-section">
+          <h3>Product Information</h3>
+          <label class="field">
+            <span>Product Title</span>
+            <input type="text" id="editName" name="name" placeholder="Product Name">
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea id="editDescription" name="description" placeholder="Describe the product."></textarea>
+          </label>
+
+          <label class="field">
+            <span>How to Apply</span>
+            <textarea id="editHowToApply" name="how_to_apply" placeholder="Explain how to use this product."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Benefits</span>
+            <textarea id="editBenefits" name="benefits" placeholder="List the key benefits."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Key Features</span>
+            <textarea id="editKeyFeatures" name="key_features" placeholder="Highlight standout features."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Ingredients</span>
+            <textarea id="editIngredients" name="ingredients" placeholder="List ingredients or materials."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Product Model No</span>
+            <input type="text" id="editModelNo" name="product_model_no" placeholder="e.g., SKG-2026-001">
+          </label>
+
+          <div class="grid-2">
+            <label class="field">
+              <span>Base Price</span>
+              <input type="number" id="editBasePrice" name="base_price" placeholder="Base Price">
+            </label>
+            <label class="field">
+              <span>Category</span>
+              <select id="editCategorySelect"></select>
+            </label>
+            <label class="field">
+              <span>Subcategory</span>
+              <select id="editSubcategorySelect" name="subcategory_id"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h3>Current Media</h3>
+          <div id="editCurrentMedia" class="media-grid"></div>
+          
+          <div class="section-head">
+            <h3>Add New Images</h3>
+            <span class="meta">Select new images to add</span>
+          </div>
+          <div class="upload-area compact">
+            <input type="file" name="gallery" id="editGalleryInput" multiple accept="image/*">
+            <div>
+              <p>Drop or select new images to add</p>
+              <span id="editGalleryCounter" class="counter">0 selected</span>
+            </div>
+          </div>
+          <div id="editGalleryPreview" class="preview-grid"></div>
+        </div>
+
+        <div class="modal-section">
+          <div class="section-head">
+            <h3>Color Variants</h3>
+            <button type="button" class="ghost" onclick="addEditVariant()">Add New Color</button>
+          </div>
+          <div id="editVariants" class="variant-list"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="script.js"></script>

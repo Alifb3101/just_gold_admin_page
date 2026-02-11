@@ -8,6 +8,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Routes
+app.use("/api/v1", require("./routes/product.routes"));
+
 // Static folders
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use(express.static(path.join(__dirname, "../public")));
@@ -17,11 +20,8 @@ app.get("/", (req, res) => {
   res.send("ADMIN SERVER WORKING 🚀");
 });
 
-// Routes
-app.use("/api/products", require("./routes/product.routes"));
-
-// IMPORTANT: Force numeric port
-const PORT = parseInt(process.env.PORT) || 3001;
+// IMPORTANT: Force numeric port; default to hosted backend port 5000
+const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 // LISTEN ON ALL NETWORK INTERFACES
 app.listen(PORT, "0.0.0.0", () => {
