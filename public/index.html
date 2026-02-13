@@ -229,6 +229,31 @@
   </div>
 </div>
 
+<!-- Quick Add Color Modal -->
+<div id="quickVariantModal" class="modal-overlay">
+  <div class="modal small-modal">
+    <div class="modal-header">
+      <h2 id="quickVariantTitle">Add Color</h2>
+      <button type="button" class="modal-close" onclick="closeQuickVariantModal()">&times;</button>
+    </div>
+    <form id="quickVariantForm" enctype="multipart/form-data">
+      <div class="modal-body">
+        <div class="modal-section quick-variant-body">
+          <div class="section-head">
+            <h3>New Colors</h3>
+            <button type="button" class="ghost" id="quickAddVariantBtn">Add More Color</button>
+          </div>
+          <div id="quickVariantsList" class="variant-list"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeQuickVariantModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Add Color(s)</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>

@@ -29,6 +29,10 @@ body {
 .hero {
   display: flex;
   flex-wrap: wrap;
+
+.modal.small-modal {
+  max-width: 640px;
+}
   gap: 24px;
   justify-content: space-between;
   align-items: center;
@@ -61,6 +65,28 @@ body {
   background: var(--ink);
   color: #fff6ea;
   padding: 16px 20px;
+.quick-variant {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: #fffdf8;
+  position: relative;
+}
+
+.quick-variant .remove-quick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: #f8e1d1;
+  color: var(--accent-dark);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
   border-radius: 14px;
   display: grid;
   gap: 4px;
@@ -267,6 +293,37 @@ textarea {
   object-fit: cover;
 }
 
+.color-panel-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: #fff8ef;
+}
+
+.color-panel-input {
+  display: none;
+}
+
+.color-panel-input.active {
+  display: grid;
+  gap: 8px;
+}
+
+.color-panel-image-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.compact-field input[type="text"] {
+  width: 100%;
+  min-height: 48px;
+}
+
 .remove-img {
   position: absolute;
   top: 4px;
@@ -308,6 +365,14 @@ button {
   box-shadow: 0 14px 24px rgba(199, 119, 44, 0.3);
 }
 
+.submitBtn.is-loading,
+.btn-primary.is-loading,
+.submitBtn:disabled,
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .product-list {
   display: grid;
   gap: 16px;
@@ -320,6 +385,12 @@ button {
   border: 1px solid var(--border);
 }
 
+.product-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .product-item button {
   margin-top: 10px;
   border: none;
@@ -328,6 +399,15 @@ button {
   background: #f2d6c1;
   color: var(--accent-dark);
   cursor: pointer;
+}
+
+.product-item .add-color-btn {
+  background: #dcebff;
+  color: #0b3a74;
+}
+
+.product-item .edit-btn {
+  background: #f2d6c1;
 }
 
 @media (max-width: 900px) {

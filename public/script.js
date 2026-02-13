@@ -175,9 +175,15 @@ async function loadProducts(page = 1) {
         <p class="meta">${p.description || "No description"}</p>
         <div class="product-actions">
           <button class="edit-btn" onclick="editProduct('${p.slug}', ${p.id})">Edit</button>
+          <button class="add-color-btn" data-product-id="${p.id}">+ Color</button>
           <button class="delete-btn" onclick="deleteProduct(${p.id})">Delete</button>
         </div>
       `;
+
+      const quickBtn = div.querySelector(".add-color-btn");
+      if (quickBtn) {
+        quickBtn.addEventListener("click", () => openQuickVariant(p.id, p.name || "Product"));
+      }
 
       container.appendChild(div);
     });
@@ -202,6 +208,20 @@ const galleryPreview = document.getElementById("galleryPreview");
 const galleryCounter = document.getElementById("galleryCounter");
 const videoInput = document.getElementById("videoInput");
 const videoMeta = document.getElementById("videoMeta");
+
+function setButtonLoading(button, isLoading, loadingText = "Loading…") {
+  if (!button) return;
+  if (isLoading) {
+    button.dataset.originalText = button.textContent;
+    button.textContent = loadingText;
+    button.disabled = true;
+    button.classList.add("is-loading");
+  } else {
+    button.textContent = button.dataset.originalText || button.textContent;
+    button.disabled = false;
+    button.classList.remove("is-loading");
+  }
+}
 
 function getFileKey(file) {
   return `${file.name}-${file.size}-${file.lastModified}`;
@@ -297,6 +317,7 @@ function addVariant() {
   div.innerHTML = `
     <input type="text" placeholder="Color Name" class="color" required>
     <input type="text" placeholder="Type (optional, e.g. warm/cool)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
     <input type="text" placeholder="Variant Model No" class="variant-model-no" required>
     <input type="number" placeholder="Stock" class="stock" required>
     <input type="number" placeholder="Variant Price (optional)" class="price">
@@ -318,12 +339,223 @@ function addVariant() {
   const secondaryImageInput = div.querySelector(".secondary-image");
   bindImagePreview(mainImageInput, `preview-${variantId}`);
   bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
 
   document.getElementById("variants").appendChild(div);
 }
 
 function removeVariant(button) {
   button.parentElement.remove();
+}
+
+function colorPanelFieldsMarkup() {
+  return `
+    <div class="color-panel-fields" data-color-panel>
+      <label class="field">
+        <span>Color Panel Type</span>
+        <select class="color-panel-type">
+          <option value="hex" selected>Hex</option>
+          <option value="gradient">Gradient</option>
+          <option value="image">Image</option>
+        </select>
+      </label>
+      <div class="color-panel-input" data-panel="hex">
+        <label class="field compact-field">
+          <span>Hex Value</span>
+          <input type="text" class="color-panel-value-hex" value="#000000" placeholder="#000000">
+        </label>
+      </div>
+      <div class="color-panel-input" data-panel="gradient">
+        <label class="field">
+          <span>CSS Gradient</span>
+          <input type="text" class="color-panel-value-gradient" placeholder="linear-gradient(...) or radial-gradient(...)" />
+        </label>
+      </div>
+      <div class="color-panel-input" data-panel="image">
+        <div class="color-panel-image-inputs">
+          <label class="variant-image-label">
+            <span>Upload Image</span>
+            <input type="file" class="color-panel-image-file" accept="image/*">
+          </label>
+          <p class="meta color-panel-image-current" hidden></p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function normalizeHexValue(value) {
+  if (typeof value !== "string") return "#000000";
+  const trimmed = value.trim();
+  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) {
+    return trimmed;
+  }
+  return "#000000";
+}
+
+function setupColorPanelFields(container, initialType = "hex", initialValue = "") {
+  if (!container) return;
+  const select = container.querySelector(".color-panel-type");
+  const hexInput = container.querySelector(".color-panel-value-hex");
+  const gradientInput = container.querySelector(".color-panel-value-gradient");
+  const imageCurrent = container.querySelector(".color-panel-image-current");
+
+  const showPanel = (type) => {
+    container.querySelectorAll(".color-panel-input").forEach(panel => {
+      panel.classList.toggle("active", panel.dataset.panel === type);
+    });
+  };
+
+  const typeToSet = initialType || "hex";
+  select.value = typeToSet;
+
+  if (typeToSet === "hex" && hexInput) {
+    hexInput.value = initialValue ? normalizeHexValue(initialValue) : hexInput.value;
+  }
+  if (typeToSet === "gradient" && gradientInput && initialValue) {
+    gradientInput.value = initialValue;
+  }
+  if (typeToSet === "image" && imageCurrent && initialValue) {
+    imageCurrent.textContent = `Current: ${initialValue}`;
+    imageCurrent.hidden = false;
+    container.dataset.initialPanelValue = initialValue;
+  }
+
+  select.addEventListener("change", () => showPanel(select.value));
+  showPanel(select.value);
+}
+
+function collectColorPanelData(variantEl, formData, variantIndex) {
+  const typeSelect = variantEl.querySelector(".color-panel-type");
+  const hexInput = variantEl.querySelector(".color-panel-value-hex");
+  const gradientInput = variantEl.querySelector(".color-panel-value-gradient");
+  const imageFileInput = variantEl.querySelector(".color-panel-image-file");
+
+  const type = typeSelect ? (typeSelect.value || "hex") : "hex";
+  let value = null;
+
+  if (type === "hex" && hexInput) {
+    value = hexInput.value.trim() || null;
+  } else if (type === "gradient" && gradientInput) {
+    value = gradientInput.value.trim() || null;
+  } else if (type === "image") {
+    if (imageFileInput && imageFileInput.files[0]) {
+      formData.append(`color_panel_image_${variantIndex}`, imageFileInput.files[0]);
+      value = null;
+    }
+    if ((!value || value === "") && variantEl.dataset.initialPanelValue) {
+      value = variantEl.dataset.initialPanelValue;
+    }
+  }
+
+  return {
+    color_panel_type: type || null,
+    color_panel_value: value || null
+  };
+}
+
+/* =========================
+   QUICK ADD VARIANT (PRODUCT LIST)
+========================= */
+
+let quickVariantProductId = null;
+let quickVariantProductName = "";
+
+function openQuickVariant(productId, productName = "Product") {
+  quickVariantProductId = productId;
+  quickVariantProductName = productName;
+
+  const modal = document.getElementById("quickVariantModal");
+  const title = document.getElementById("quickVariantTitle");
+  if (title) {
+    title.textContent = `Add Color · ${productName}`;
+  }
+
+  resetQuickVariantForm();
+
+  if (modal) {
+    modal.classList.add("active");
+    document.body.style.overflow = "hidden";
+    const colorInput = modal.querySelector("#quickColor");
+    if (colorInput) {
+      colorInput.focus();
+    }
+  }
+}
+
+function closeQuickVariantModal() {
+  const modal = document.getElementById("quickVariantModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+  document.body.style.overflow = "";
+  quickVariantProductId = null;
+  quickVariantProductName = "";
+}
+
+function addQuickVariantBlock() {
+  const list = document.getElementById("quickVariantsList");
+  if (!list) return null;
+
+  const uid = `qv-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const variantId = uid;
+
+  const div = document.createElement("div");
+  div.className = "quick-variant variant";
+  div.dataset.uid = uid;
+
+  div.innerHTML = `
+    <button type="button" class="remove-quick" aria-label="Remove" onclick="removeQuickVariant(this)">✕</button>
+    <input type="text" placeholder="Color Name" class="color" required>
+    <input type="text" placeholder="Type (optional)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
+    <input type="text" placeholder="Variant Model No" class="variant-model-no" required>
+    <input type="number" placeholder="Stock" class="stock" required>
+    <input type="number" placeholder="Variant Price (optional)" class="price">
+    <input type="number" placeholder="Discount Price (optional)" class="discount">
+    <label class="variant-image-label">
+      <span>Main Image</span>
+      <input type="file" class="main-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="preview-${variantId}"></div>
+    <label class="variant-image-label">
+      <span>Secondary Image (optional)</span>
+      <input type="file" class="secondary-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="secondary-preview-${variantId}"></div>
+  `;
+
+  const mainImageInput = div.querySelector(".main-image");
+  const secondaryImageInput = div.querySelector(".secondary-image");
+  bindImagePreview(mainImageInput, `preview-${variantId}`);
+  bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
+
+  list.appendChild(div);
+  return div;
+}
+
+function removeQuickVariant(button) {
+  const block = button.closest(".quick-variant");
+  if (!block) return;
+  block.remove();
+
+  const list = document.getElementById("quickVariantsList");
+  if (list && list.querySelectorAll(".quick-variant").length === 0) {
+    addQuickVariantBlock();
+  }
+}
+
+function resetQuickVariantForm() {
+  const form = document.getElementById("quickVariantForm");
+  if (!form) return;
+  form.reset();
+
+  const list = document.getElementById("quickVariantsList");
+  if (list) {
+    list.innerHTML = "";
+    addQuickVariantBlock();
+  }
 }
 
 /* =========================
@@ -349,12 +581,8 @@ document.getElementById("productForm")
 
   const variantElements = document.querySelectorAll(".variant");
 
-  if (variantElements.length === 0) {
-    alert("Add at least one color variant");
-    return;
-  }
-
   const variants = [];
+  const submitBtn = form.querySelector(".submitBtn");
 
   for (let i = 0; i < variantElements.length; i++) {
     const div = variantElements[i];
@@ -385,6 +613,10 @@ document.getElementById("productForm")
       variantData.color_type = variantType;
     }
 
+    const panelData = collectColorPanelData(div, formData, i);
+    variantData.color_panel_type = panelData.color_panel_type;
+    variantData.color_panel_value = panelData.color_panel_value;
+
     variants.push(variantData);
 
     // Add variant main image (color_0, color_1, ...)
@@ -398,6 +630,7 @@ document.getElementById("productForm")
     }
   }
 
+  setButtonLoading(submitBtn, true, "Creating…");
   formData.append("variants", JSON.stringify(variants));
 
   formData.delete("gallery");
@@ -423,6 +656,7 @@ document.getElementById("productForm")
 
     if (!response.ok) {
       alert(result.message || "Error creating product");
+      setButtonLoading(submitBtn, false);
       return;
     }
 
@@ -440,6 +674,8 @@ document.getElementById("productForm")
   } catch (error) {
     console.error("Create Product Error:", error);
     alert("Server Error");
+  } finally {
+    setButtonLoading(submitBtn, false);
   }
 });
 
@@ -673,6 +909,7 @@ function renderEditExistingVariants(variants) {
       <input type="hidden" class="variant-db-id" value="${v.id}">
       <input type="text" placeholder="Color Name" class="color" value="${v.shade || ""}" required>
       <input type="text" placeholder="Type (warm/cool)" class="variant-type" value="${v.color_type || ""}">
+      ${colorPanelFieldsMarkup()}
       <input type="text" placeholder="Variant Model No" class="variant-model-no" value="${v.variant_model_no || ""}">
       <input type="number" placeholder="Stock" class="stock" value="${v.stock || 0}" required>
       <input type="number" placeholder="Variant Price" class="price" value="${v.price || ""}">
@@ -702,6 +939,7 @@ function renderEditExistingVariants(variants) {
     const secondaryImageInput = div.querySelector(".secondary-image");
     bindImagePreview(mainImageInput, `preview-${variantUid}`);
     bindImagePreview(secondaryImageInput, `secondary-preview-${variantUid}`);
+    setupColorPanelFields(div.querySelector("[data-color-panel]"), v.color_panel_type || "hex", v.color_panel_value || "");
 
     container.appendChild(div);
   });
@@ -730,6 +968,7 @@ function addEditVariant() {
     <span class="new-variant-badge">NEW</span>
     <input type="text" placeholder="Color Name" class="color" required>
     <input type="text" placeholder="Type (warm/cool)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
     <input type="text" placeholder="Variant Model No" class="variant-model-no">
     <input type="number" placeholder="Stock" class="stock" required>
     <input type="number" placeholder="Variant Price" class="price">
@@ -751,6 +990,7 @@ function addEditVariant() {
   const secondaryImageInput = div.querySelector(".secondary-image");
   bindImagePreview(mainImageInput, `preview-${variantId}`);
   bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
 
   document.getElementById("editVariants").appendChild(div);
 }
@@ -816,6 +1056,8 @@ document.getElementById("editProductForm")
     e.preventDefault();
 
     const formData = new FormData();
+    const saveBtn = document.querySelector("#editProductForm .btn-primary");
+    setButtonLoading(saveBtn, true, "Saving…");
     
     // Add basic fields
     formData.append("name", document.getElementById("editName").value);
@@ -870,6 +1112,10 @@ document.getElementById("editProductForm")
         color_type: variantType || null
       };
 
+      const panelData = collectColorPanelData(div, formData, variantIndex);
+      variantData.color_panel_type = panelData.color_panel_type;
+      variantData.color_panel_value = panelData.color_panel_value;
+
       // Include ID for existing variants
       if (dbId) {
         variantData.id = Number(dbId.value);
@@ -900,6 +1146,7 @@ document.getElementById("editProductForm")
 
       if (!response.ok) {
         alert(result.message || "Error updating product");
+        setButtonLoading(saveBtn, false);
         return;
       }
 
@@ -910,8 +1157,113 @@ document.getElementById("editProductForm")
     } catch (error) {
       console.error("Update Product Error:", error);
       alert("Server Error");
+    } finally {
+      setButtonLoading(saveBtn, false);
     }
   });
+
+// Quick add variant form (from product list)
+const quickVariantForm = document.getElementById("quickVariantForm");
+if (quickVariantForm) {
+  const addMoreBtn = document.getElementById("quickAddVariantBtn");
+  if (addMoreBtn) {
+    addMoreBtn.addEventListener("click", () => {
+      const block = addQuickVariantBlock();
+      if (block) {
+        block.scrollIntoView({ behavior: "smooth", block: "center" });
+        const colorInput = block.querySelector(".color");
+        if (colorInput) colorInput.focus();
+      }
+    });
+  }
+
+  quickVariantForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!quickVariantProductId) {
+      alert("Select a product to add a color");
+      return;
+    }
+
+    const formData = new FormData();
+    const blocks = quickVariantForm.querySelectorAll("#quickVariantsList .quick-variant");
+    if (!blocks.length) {
+      alert("Add at least one color variant");
+      return;
+    }
+
+    const variantsPayload = [];
+    let variantIndex = 0;
+
+    for (const block of blocks) {
+      const color = block.querySelector(".color")?.value.trim();
+      const variantType = block.querySelector(".variant-type")?.value.trim();
+      const variantModelNo = block.querySelector(".variant-model-no")?.value.trim();
+      const stock = block.querySelector(".stock")?.value;
+      const price = block.querySelector(".price")?.value;
+      const discount = block.querySelector(".discount")?.value;
+      const mainImageInput = block.querySelector(".main-image");
+      const secondaryImageInput = block.querySelector(".secondary-image");
+
+      if (!color || !variantModelNo || !stock) {
+        alert("Color name, model no, and stock are required for each variant");
+        return;
+      }
+
+      const variantData = {
+        color,
+        variant_model_no: variantModelNo,
+        stock: Number(stock),
+        price: price ? Number(price) : null,
+        discount_price: discount ? Number(discount) : null,
+        color_type: variantType || null
+      };
+
+      const panelData = collectColorPanelData(block, formData, variantIndex);
+      variantData.color_panel_type = panelData.color_panel_type;
+      variantData.color_panel_value = panelData.color_panel_value;
+
+      if (mainImageInput && mainImageInput.files[0]) {
+        formData.append(`color_${variantIndex}`, mainImageInput.files[0]);
+      }
+      if (secondaryImageInput && secondaryImageInput.files[0]) {
+        formData.append(`color_secondary_${variantIndex}`, secondaryImageInput.files[0]);
+      }
+
+      variantsPayload.push(variantData);
+      variantIndex += 1;
+    }
+
+    formData.append("variants", JSON.stringify(variantsPayload));
+
+    const submitBtn = quickVariantForm.querySelector(".btn-primary");
+    setButtonLoading(submitBtn, true, "Adding…");
+
+    try {
+      const response = await fetch(`${API_BASE}/product/${quickVariantProductId}`, {
+        method: "PUT",
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.message || "Error adding color variant");
+        setButtonLoading(submitBtn, false);
+        return;
+      }
+
+      alert("Color variant added");
+      closeQuickVariantModal();
+      loadProducts(currentPage);
+
+    } catch (error) {
+      console.error("Quick Variant Error:", error);
+      alert("Server Error");
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+}
 
 /* =========================
    INIT
@@ -926,6 +1278,10 @@ window.closeEditModal = closeEditModal;
 window.addEditVariant = addEditVariant;
 window.markMediaForDeletion = markMediaForDeletion;
 window.markVariantForDeletion = markVariantForDeletion;
+window.openQuickVariant = openQuickVariant;
+window.closeQuickVariantModal = closeQuickVariantModal;
+window.addQuickVariantBlock = addQuickVariantBlock;
+window.removeQuickVariant = removeQuickVariant;
 
 loadCategories();
 loadProducts();
