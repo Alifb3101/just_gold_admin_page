@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:5000/api/v1";
+const API_BASE = "/api/v1";
 
 const MAX_GALLERY = 6;
 const selectedImages = [];

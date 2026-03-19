@@ -38,17 +38,16 @@ const authenticateAdmin = (req, res, next) => {
   }
 
   // Placeholder: In production, decode JWT and verify admin role
-  // For development/testing, we'll allow requests through
+  // For development/testing, use _test_admin_id query param
   const testAdminId = req.query._test_admin_id;
   if (testAdminId) {
     req.admin = { id: parseInt(testAdminId, 10), role: "admin" };
-    next();
-  } else {
-    // For now, allow admin access without strict verification
-    // TODO: Implement proper JWT verification
-    req.admin = { id: 1, role: "admin" };
-    next();
+    return next();
   }
+
+  // Production: Implement proper JWT verification
+  // For now, reject requests without explicit test admin ID (secure by default)
+  return res.status(401).json({ message: "Unauthorized - Admin role required. Use ?_test_admin_id=1 for testing" });
 };
 
 /* ============================================================
