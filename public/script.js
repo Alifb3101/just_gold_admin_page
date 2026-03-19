@@ -2,15 +2,67 @@ const API_BASE = "http://localhost:5000/api/v1";
 
 const MAX_GALLERY = 6;
 const selectedImages = [];
-const PRODUCTS_LIMIT = 12;
+const PRODUCTS_LIMIT = 50;
 let currentPage = 1;
+let totalProductPages = 1;
+let isLoadingProducts = false;
 
 let categories = [];
+const BEST_SELLER_SUBCATEGORY_ID = "3";
+const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
 
 const categorySelectEl = document.getElementById("categorySelect");
 const subcategorySelectEl = document.getElementById("subcategorySelect");
 const categoryStatusEl = document.getElementById("categoryStatus");
 const productListStatusEl = document.getElementById("productListStatus");
+const productPaginationEl = document.getElementById("productPagination");
+const productPaginationInfoEl = document.getElementById("productPaginationInfo");
+const productFirstPageBtn = document.getElementById("productFirstPage");
+const productPrevPageBtn = document.getElementById("productPrevPage");
+const productNextPageBtn = document.getElementById("productNextPage");
+const productLastPageBtn = document.getElementById("productLastPage");
+const tagsInputEl = document.getElementById("tagsInput");
+const bestSellerToggleEl = document.getElementById("bestSellerToggle");
+const editTagsInputEl = document.getElementById("editTagsInput");
+const editBestSellerToggleEl = document.getElementById("editBestSellerToggle");
+
+function updateProductPagination(totalCount = 0) {
+  currentPage = 1;
+  totalProductPages = 1;
+
+  if (productPaginationInfoEl) {
+    productPaginationInfoEl.textContent = "All products";
+  }
+
+  if (productPaginationEl) {
+    productPaginationEl.hidden = true;
+  }
+
+  if (productFirstPageBtn) {
+    productFirstPageBtn.disabled = true;
+  }
+  if (productPrevPageBtn) {
+    productPrevPageBtn.disabled = true;
+  }
+  if (productNextPageBtn) {
+    productNextPageBtn.disabled = true;
+  }
+  if (productLastPageBtn) {
+    productLastPageBtn.disabled = true;
+  }
+}
+
+function getProductRangeText(loadedCount) {
+  if (!loadedCount) {
+    return "No products in the catalog";
+  }
+
+  return `Showing all ${loadedCount} products`;
+}
+
+function goToProductPage(page) {
+  loadProducts();
+}
 
 function formatCurrency(value) {
   if (value === undefined || value === null || value === "") {
@@ -34,6 +86,56 @@ function findParentCategoryId(childId) {
     }
   }
   return null;
+}
+
+function buildTagsPayload(rawValue) {
+  if (rawValue && typeof rawValue !== "string") {
+    return { ok: false, message: "Tags value must be a JSON string" };
+  }
+
+  let parsed = [];
+  if (rawValue && rawValue.trim()) {
+    try {
+      parsed = JSON.parse(rawValue.trim());
+    } catch (err) {
+      return { ok: false, message: "Tags must be valid JSON (array of tag objects)" };
+    }
+
+    if (!Array.isArray(parsed)) {
+      return { ok: false, message: "Tags JSON must be an array" };
+    }
+  }
+
+  const tags = [];
+  const seen = new Set();
+
+  for (const tag of parsed) {
+    if (!tag || typeof tag !== "object") {
+      return { ok: false, message: "Each tag must be an object" };
+    }
+
+    const type = tag.type;
+    const code = typeof tag.code === "string" ? tag.code.toUpperCase() : "";
+
+    if (type !== "country" && type !== "badge") {
+      return { ok: false, message: "Tag type must be 'country' or 'badge'" };
+    }
+    if (!TAG_CODE_REGEX.test(code)) {
+      return { ok: false, message: "Tag code must be 1-24 chars (A-Z, 0-9, _ or -)" };
+    }
+
+    const key = `${type}:${code}`;
+    if (!seen.has(key)) {
+      tags.push({ type, code });
+      seen.add(key);
+    }
+  }
+
+  if (tags.length > 20) {
+    return { ok: false, message: "Maximum 20 tags allowed" };
+  }
+
+  return { ok: true, tags };
 }
 
 /* =========================
@@ -130,25 +232,57 @@ if (categorySelectEl) {
    LOAD PRODUCTS
 ========================= */
 
-async function loadProducts(page = 1) {
+async function fetchProductsPage(page, limit) {
+  const params = new URLSearchParams({ page, limit });
+  const res = await fetch(`${API_BASE}/products?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchAllProducts() {
+  const productsById = new Map();
+  let page = 1;
+  let guard = 0;
+  const maxPages = 100;
+
+  while (guard < maxPages) {
+    const data = await fetchProductsPage(page, PRODUCTS_LIMIT);
+    const products = Array.isArray(data.products) ? data.products : [];
+    const reportedTotalPages = Number(data.total_pages) || 0;
+
+    products.forEach((product) => {
+      productsById.set(product.id, product);
+    });
+
+    const hasMoreFromTotal = reportedTotalPages > 0 ? page < reportedTotalPages : false;
+    const hasMoreFromPage = products.length === PRODUCTS_LIMIT;
+
+    if (!hasMoreFromTotal && !hasMoreFromPage) {
+      break;
+    }
+
+    page += 1;
+    guard += 1;
+  }
+
+  return Array.from(productsById.values());
+}
+
+async function loadProducts() {
+  if (isLoadingProducts) {
+    return;
+  }
+
+  isLoadingProducts = true;
   if (productListStatusEl) {
     productListStatusEl.textContent = "Loading products…";
   }
 
   try {
-    const params = new URLSearchParams({
-      page,
-      limit: PRODUCTS_LIMIT
-    });
-
-    const res = await fetch(`${API_BASE}/products?${params.toString()}`);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-    const products = Array.isArray(data.products) ? data.products : [];
-    currentPage = data.page || page;
+    const products = await fetchAllProducts();
+    updateProductPagination(products.length);
 
     const container = document.getElementById("productList");
     if (!container) return;
@@ -189,14 +323,40 @@ async function loadProducts(page = 1) {
     });
 
     if (productListStatusEl) {
-      productListStatusEl.textContent = `Showing ${products.length} of ${data.count || products.length} products`;
+      productListStatusEl.textContent = getProductRangeText(products.length);
     }
   } catch (err) {
     console.error("Load Products Error:", err);
     if (productListStatusEl) {
       productListStatusEl.textContent = "Failed to load products";
     }
+  } finally {
+    isLoadingProducts = false;
   }
+}
+
+if (productFirstPageBtn) {
+  productFirstPageBtn.addEventListener("click", () => {
+    goToProductPage(1);
+  });
+}
+
+if (productPrevPageBtn) {
+  productPrevPageBtn.addEventListener("click", () => {
+    goToProductPage(currentPage - 1);
+  });
+}
+
+if (productNextPageBtn) {
+  productNextPageBtn.addEventListener("click", () => {
+    goToProductPage(currentPage + 1);
+  });
+}
+
+if (productLastPageBtn) {
+  productLastPageBtn.addEventListener("click", () => {
+    goToProductPage(totalProductPages);
+  });
 }
 
 /* =========================
@@ -570,6 +730,29 @@ document.getElementById("productForm")
   const form = e.target;
   const formData = new FormData(form);
 
+  const wantsBestSeller = bestSellerToggleEl?.checked === true;
+  const tagsResult = buildTagsPayload(tagsInputEl ? tagsInputEl.value : "");
+
+  if (!tagsResult.ok) {
+    alert(tagsResult.message);
+    return;
+  }
+
+  if (tagsResult.tags.length) {
+    formData.set("tags", JSON.stringify(tagsResult.tags));
+  } else {
+    formData.delete("tags");
+  }
+
+  if (wantsBestSeller) {
+    formData.set("subcategory_id", BEST_SELLER_SUBCATEGORY_ID);
+  } else {
+    // If subcategory is not selected, remove it so category_id is used
+    if (!formData.get("subcategory_id")) {
+      formData.delete("subcategory_id");
+    }
+  }
+
   /* ---- Gallery Validation ---- */
 
   if (selectedImages.length > MAX_GALLERY) {
@@ -772,10 +955,32 @@ async function editProduct(slug, productId) {
     document.getElementById("editDescription").value = product.description || "";
     document.getElementById("editHowToApply").value = product.how_to_apply || "";
     document.getElementById("editBenefits").value = product.benefits || "";
-    document.getElementById("editKeyFeatures").value = product.key_features || "";
+    document.getElementById("editKeyFeatures").value = product.product_description || "";
     document.getElementById("editIngredients").value = product.ingredients || "";
     document.getElementById("editModelNo").value = product.product_model_no || "";
     document.getElementById("editBasePrice").value = product.base_price || "";
+
+    const rawTags = product.tags || responsePayload.tags;
+    let normalizedTags = "";
+    if (typeof rawTags === "string") {
+      try {
+        const parsed = JSON.parse(rawTags);
+        if (Array.isArray(parsed)) {
+          normalizedTags = JSON.stringify(parsed);
+        }
+      } catch (err) {
+        normalizedTags = rawTags;
+      }
+    } else if (Array.isArray(rawTags)) {
+      normalizedTags = JSON.stringify(rawTags);
+    }
+
+    if (editTagsInputEl) {
+      editTagsInputEl.value = normalizedTags;
+    }
+    if (editBestSellerToggleEl) {
+      editBestSellerToggleEl.checked = String(product.category_id) === BEST_SELLER_SUBCATEGORY_ID;
+    }
 
     // Populate categories
     const editCategorySelect = document.getElementById("editCategorySelect");
@@ -1064,11 +1269,32 @@ document.getElementById("editProductForm")
     formData.append("description", document.getElementById("editDescription").value);
     formData.append("how_to_apply", document.getElementById("editHowToApply").value);
     formData.append("benefits", document.getElementById("editBenefits").value);
-    formData.append("key_features", document.getElementById("editKeyFeatures").value);
+    formData.append("product_description", document.getElementById("editKeyFeatures").value);
     formData.append("ingredients", document.getElementById("editIngredients").value);
     formData.append("product_model_no", document.getElementById("editModelNo").value);
     formData.append("base_price", document.getElementById("editBasePrice").value);
-    formData.append("subcategory_id", document.getElementById("editSubcategorySelect").value);
+
+    const wantsBestSellerEdit = editBestSellerToggleEl?.checked === true;
+    const editTagsRaw = editTagsInputEl ? editTagsInputEl.value : "";
+    const editTagsResult = buildTagsPayload(editTagsRaw);
+
+    if (!editTagsResult.ok) {
+      alert(editTagsResult.message);
+      setButtonLoading(saveBtn, false);
+      return;
+    }
+
+    const editSubcategoryId = wantsBestSellerEdit
+      ? BEST_SELLER_SUBCATEGORY_ID
+      : document.getElementById("editSubcategorySelect").value;
+
+    if (editSubcategoryId) {
+      formData.append("subcategory_id", editSubcategoryId);
+    }
+
+    if (editTagsResult.tags.length) {
+      formData.append("tags", JSON.stringify(editTagsResult.tags));
+    }
 
     // Add media deletion IDs
     if (deleteMediaIds.length > 0) {

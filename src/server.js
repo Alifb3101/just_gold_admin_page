@@ -10,6 +10,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/v1", require("./routes/product.routes"));
+app.use("/api/v1", require("./routes/orders.routes"));
 
 // Static folders
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));

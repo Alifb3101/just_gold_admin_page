@@ -54,7 +54,7 @@ router.post("/product", upload.any(), async (req, res) => {
       description,
       how_to_apply,
       benefits,
-      key_features,
+      product_description,
       ingredients,
       product_model_no,
       subcategory_id,
@@ -63,7 +63,7 @@ router.post("/product", upload.any(), async (req, res) => {
 
     const product = await client.query(
       `INSERT INTO products
-       (name, slug, description, how_to_apply, benefits, key_features, ingredients, product_model_no, category_id)
+       (name, slug, description, how_to_apply, benefits, product_description, ingredients, product_model_no, category_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id`,
       [
@@ -72,10 +72,10 @@ router.post("/product", upload.any(), async (req, res) => {
         description,
         how_to_apply,
         benefits,
-        key_features,
+        product_description,
         ingredients,
         product_model_no,
-        subcategory_id
+        subcategory_id || null
       ]
     );
 
@@ -232,7 +232,7 @@ router.put("/product/:id", upload.any(), async (req, res) => {
       description,
       how_to_apply,
       benefits,
-      key_features,
+      product_description,
       ingredients,
       product_model_no,
       subcategory_id,
@@ -265,9 +265,9 @@ router.put("/product/:id", upload.any(), async (req, res) => {
       updates.push(`benefits = $${paramIndex++}`);
       values.push(benefits);
     }
-    if (key_features !== undefined) {
-      updates.push(`key_features = $${paramIndex++}`);
-      values.push(key_features);
+    if (product_description !== undefined) {
+      updates.push(`product_description = $${paramIndex++}`);
+      values.push(product_description);
     }
     if (ingredients !== undefined) {
       updates.push(`ingredients = $${paramIndex++}`);
@@ -279,7 +279,7 @@ router.put("/product/:id", upload.any(), async (req, res) => {
     }
     if (subcategory_id !== undefined) {
       updates.push(`category_id = $${paramIndex++}`);
-      values.push(subcategory_id);
+      values.push(subcategory_id || null);
     }
     if (base_price !== undefined) {
       updates.push(`base_price = $${paramIndex++}`);

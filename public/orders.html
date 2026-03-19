@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders - Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="orders.css">
+</head>
+<body>
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">ADMIN</p>
+      <h1>Orders</h1>
+      <p class="subtitle">View and manage customer orders, update statuses, and track fulfillment.</p>
+    </div>
+    <div class="hero-actions">
+      <a href="index.html" class="nav-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Products
+      </a>
+      <div class="hero-chip">
+        <span>Order Management</span>
+        <strong id="orderCount">Loading...</strong>
+      </div>
+    </div>
+  </header>
+
+  <main class="orders-layout">
+    <!-- Filters Section -->
+    <section class="filters-panel panel">
+      <h2>Filters</h2>
+      
+      <label class="field">
+        <span>Search</span>
+        <input type="text" id="searchInput" placeholder="Order #, customer name, email...">
+      </label>
+
+      <label class="field">
+        <span>Order Status</span>
+        <select id="orderStatusFilter">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="processing">Processing</option>
+          <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Payment Status</span>
+        <select id="paymentStatusFilter">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="failed">Failed</option>
+          <option value="refunded">Refunded</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Payment Method</span>
+        <select id="paymentMethodFilter">
+          <option value="">All</option>
+          <option value="stripe">Stripe</option>
+          <option value="cod">Cash on Delivery</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Date From</span>
+        <input type="date" id="dateFrom">
+      </label>
+
+      <label class="field">
+        <span>Date To</span>
+        <input type="date" id="dateTo">
+      </label>
+
+      <button type="button" class="btn btn-primary" id="applyFilters">Apply Filters</button>
+      <button type="button" class="btn btn-secondary" id="clearFilters">Clear</button>
+    </section>
+
+    <!-- Orders List -->
+    <section class="orders-panel panel">
+      <div class="section-head">
+        <h2>Recent Orders</h2>
+        <div class="pagination-info">
+          <span id="paginationInfo">Page 1</span>
+        </div>
+      </div>
+
+      <div class="orders-table-wrapper">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th>Order #</th>
+              <th>Customer</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Payment</th>
+              <th>Total</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody">
+            <tr>
+              <td colspan="7" class="loading-cell">Loading orders...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <button type="button" class="btn btn-secondary" id="prevPage" disabled>Previous</button>
+        <span id="pageNumbers"></span>
+        <button type="button" class="btn btn-secondary" id="nextPage">Next</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalOrderNumber">Order Details</h2>
+      <button type="button" class="close-btn" id="closeModal">&times;</button>
+    </div>
+    <div class="modal-body" id="orderDetailContent">
+      Loading...
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="closeModalBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="orders.js"></script>
+</body>
+</html>

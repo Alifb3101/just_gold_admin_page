@@ -98,6 +98,37 @@ body {
   opacity: 0.8;
 }
 
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 4px 12px rgba(199, 119, 44, 0.3);
+}
+
+.nav-btn:hover {
+  background: var(--accent-dark);
+  transform: translateY(-2px);
+}
+
+.nav-btn svg {
+  flex-shrink: 0;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
@@ -143,6 +174,16 @@ body {
   display: grid;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+.checkbox-field {
+  grid-template-columns: auto 1fr;
+  align-items: flex-start;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: auto;
+  margin-top: 6px;
 }
 
 .field span {
@@ -376,6 +417,30 @@ button {
 .product-list {
   display: grid;
   gap: 16px;
+}
+
+.product-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.product-pagination[hidden] {
+  display: none;
+}
+
+.product-pagination #productPaginationInfo {
+  min-width: 110px;
+  text-align: center;
+}
+
+.product-pagination .btn-secondary {
+  min-width: 88px;
 }
 
 .product-item {

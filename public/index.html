@@ -14,13 +14,24 @@
 <div class="page">
   <header class="hero">
     <div>
-      <p class="eyebrow">JUST GOLD / ADMIN</p>
+      <p class="eyebrow">  
+         ADMIN</p>
       <h1>Product Studio</h1>
       <p class="subtitle">Create, style, and publish new pieces with rich media in minutes.</p>
     </div>
-    <div class="hero-chip">
-      <span>Media-ready</span>
-      <strong>Multi-image uploads</strong>
+    <div class="hero-actions">
+      <a href="orders.html" class="nav-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+          <rect x="9" y="3" width="6" height="4" rx="1"/>
+          <path d="M9 12h6m-6 4h6"/>
+        </svg>
+        Orders
+      </a>
+      <div class="hero-chip">
+        <span>Media-ready</span>
+        <strong>Multi-image uploads</strong>
+      </div>
     </div>
   </header>
 
@@ -50,8 +61,8 @@
           </label>
 
           <label class="field">
-            <span>Key Features</span>
-            <textarea name="key_features" placeholder="Highlight standout features."></textarea>
+            <span>product_description</span>
+            <textarea name="product_description" placeholder="Highlight standout features."></textarea>
           </label>
 
           <label class="field">
@@ -71,13 +82,25 @@
             </label>
             <label class="field">
               <span>Category</span>
-              <select id="categorySelect"></select>
+              <select id="categorySelect" name="category_id"></select>
             </label>
             <label class="field">
               <span>Subcategory</span>
               <select name="subcategory_id" id="subcategorySelect"></select>
             </label>
           </div>
+          <label class="field">
+            <span>Tags (JSON)</span>
+            <textarea id="tagsInput" name="tags" placeholder='[{"type":"country","code":"DE"},{"type":"badge","code":"NEW"}]'></textarea>
+            <p class="meta">JSON array of tags (max 20). Allowed types: country or badge. Codes: A-Z, 0-9, underscore, dash.</p>
+          </label>
+          <label class="field checkbox-field">
+            <input type="checkbox" id="bestSellerToggle">
+            <div>
+              <span>Also show in Best Seller</span>
+              <p class="meta">Sets subcategory_id to 3 (Best Seller category) and reuses the same media—no extra upload.</p>
+            </div>
+          </label>
           <p id="categoryStatus" class="meta status-line">Loading categories…</p>
         </div>
 
@@ -125,6 +148,13 @@
         <h2>Products</h2>
         <p id="productListStatus" class="meta status-line">Loading products…</p>
         <div id="productList" class="product-list"></div>
+        <div class="product-pagination" id="productPagination" hidden>
+          <button type="button" class="btn-secondary" id="productFirstPage" disabled>First</button>
+          <button type="button" class="btn-secondary" id="productPrevPage" disabled>Previous</button>
+          <span id="productPaginationInfo" class="meta">Page 1 of 1</span>
+          <button type="button" class="btn-secondary" id="productNextPage" disabled>Next</button>
+          <button type="button" class="btn-secondary" id="productLastPage" disabled>Last</button>
+        </div>
       </div>
     </aside>
   </main>
@@ -164,8 +194,8 @@
           </label>
 
           <label class="field">
-            <span>Key Features</span>
-            <textarea id="editKeyFeatures" name="key_features" placeholder="Highlight standout features."></textarea>
+            <span>product_description</span>
+            <textarea id="editKeyFeatures" name="product_description" placeholder="Highlight standout features."></textarea>
           </label>
 
           <label class="field">
@@ -185,13 +215,25 @@
             </label>
             <label class="field">
               <span>Category</span>
-              <select id="editCategorySelect"></select>
+              <select id="editCategorySelect" name="category_id"></select>
             </label>
             <label class="field">
               <span>Subcategory</span>
               <select id="editSubcategorySelect" name="subcategory_id"></select>
             </label>
           </div>
+          <label class="field">
+            <span>Tags (JSON)</span>
+            <textarea id="editTagsInput" name="tags" placeholder='[{"type":"badge","code":"BEST_SELLER"}]'></textarea>
+            <p class="meta">JSON array of tags (max 20). Types: country or badge. Codes: A-Z, 0-9, underscore, dash.</p>
+          </label>
+          <label class="field checkbox-field">
+            <input type="checkbox" id="editBestSellerToggle">
+            <div>
+              <span>Also show in Best Seller</span>
+              <p class="meta">Sets subcategory_id to 3 (Best Seller category) and keeps existing media.</p>
+            </div>
+          </label>
         </div>
 
         <div class="modal-section">
