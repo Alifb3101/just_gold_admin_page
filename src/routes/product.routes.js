@@ -2,46 +2,24 @@ const router = require("express").Router();
 const pool = require("../config/db");
 const multer = require("multer");
 const path = require("path");
-const mediaService = require("../services/mediaService");
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "../../uploads"),
   filename: (req, file, cb) => {
-    const sanitized = mediaService.sanitizeFilename(file.originalname);
-    cb(null, Date.now() + "-" + sanitized);
+    cb(null, Date.now() + "-" + file.originalname);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { 
-    files: 20,
-    fileSize: 5 * 1024 * 1024 // 5MB per file as per media guide
-  },
+  limits: { files: 20 },
   fileFilter: (req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
-    if (!allowed.includes(file.mimetype)) {
-      return cb(new Error(`Invalid file type: ${file.mimetype}`));
-    }
-    cb(null, true);
+    allowed.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error("Invalid file type"));
   }
 });
-
-// Error handling middleware for multer
-const handleMulterError = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === "FILE_TOO_LARGE") {
-      return res.status(400).json({ message: "File size exceeds 5MB limit" });
-    }
-    if (err.code === "LIMIT_FILE_COUNT") {
-      return res.status(400).json({ message: "Too many files (max 20)" });
-    }
-  }
-  if (err && err.message) {
-    return res.status(400).json({ message: err.message });
-  }
-  next();
-};
 
 /* ---------------- GET CATEGORIES ---------------- */
 
@@ -65,26 +43,10 @@ router.get("/categories", async (req, res) => {
 
 /* ---------------- CREATE PRODUCT ---------------- */
 
-router.post("/product", handleMulterError, upload.any(), async (req, res) => {
+router.post("/product", upload.any(), async (req, res) => {
   const client = await pool.connect();
-  const uploadedFilenames = (req.files || []).map(f => f.filename);
 
   try {
-    // Validate input
-    if (!req.body.name || !req.body.name.trim()) {
-      throw new Error("Product name is required");
-    }
-
-    // Validate files if any
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const validation = mediaService.validateFile(file);
-        if (!validation.valid) {
-          throw new Error(validation.error);
-        }
-      }
-    }
-
     await client.query("BEGIN");
 
     const {
@@ -160,26 +122,9 @@ router.post("/product", handleMulterError, upload.any(), async (req, res) => {
     res.json({ message: "Product Added" });
 
   } catch (err) {
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackErr) {
-      console.error("Rollback error:", rollbackErr.message);
-    }
-
-    // Cleanup uploaded files on error
-    mediaService.cleanupFiles(uploadedFilenames);
-
-    console.error("Product creation error:", err.message);
-    
-    // Return user-friendly error messages
-    if (err.message.includes("JSON")) {
-      return res.status(400).json({ message: "Invalid variant data format" });
-    }
-    if (err.message.includes("required")) {
-      return res.status(400).json({ message: err.message });
-    }
-    
-    res.status(500).json({ message: "Error creating product. Please check your input and try again." });
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ message: "Error creating product" });
   } finally {
     client.release();
   }
@@ -275,9 +220,8 @@ router.get("/product/:id-:slug", async (req, res) => {
 
 /* ---------------- UPDATE PRODUCT ---------------- */
 
-router.put("/product/:id", handleMulterError, upload.any(), async (req, res) => {
+router.put("/product/:id", upload.any(), async (req, res) => {
   const client = await pool.connect();
-  const uploadedFilenames = (req.files || []).map(f => f.filename);
 
   try {
     await client.query("BEGIN");
@@ -504,17 +448,9 @@ router.put("/product/:id", handleMulterError, upload.any(), async (req, res) => 
     });
 
   } catch (err) {
-    try {
-      await client.query("ROLLBACK");
-    } catch (rollbackErr) {
-      console.error("Rollback error:", rollbackErr.message);
-    }
-
-    // Cleanup uploaded files on error
-    mediaService.cleanupFiles(uploadedFilenames);
-
-    console.error("Product update error:", err.message);
-    res.status(500).json({ message: "Error updating product. Please check your input and try again." });
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ message: "Error updating product" });
   } finally {
     client.release();
   }

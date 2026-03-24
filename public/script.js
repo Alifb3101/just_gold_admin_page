@@ -1272,6 +1272,7 @@ document.getElementById("editProductForm")
     formData.append("ingredients", document.getElementById("editIngredients").value);
     formData.append("product_model_no", document.getElementById("editModelNo").value);
     formData.append("base_price", document.getElementById("editBasePrice").value);
+    formData.append("media_provider", document.getElementById("editMediaProvider").value);
 
     const wantsBestSellerEdit = editBestSellerToggleEl?.checked === true;
     const editTagsRaw = editTagsInputEl ? editTagsInputEl.value : "";

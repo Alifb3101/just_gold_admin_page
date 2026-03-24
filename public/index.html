@@ -106,6 +106,20 @@
 
         <div class="panel-section">
           <div class="section-head">
+            <h2>Media Storage</h2>
+          </div>
+          <label class="field">
+            <span>Media Provider</span>
+            <select name="media_provider" id="mediaProvider">
+              <option value="local">Local Storage</option>
+              <option value="cloudinary">Cloudinary</option>
+              <option value="aws_s3">AWS S3</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-head">
             <h2>Gallery</h2>
             <span class="meta">Max 6 images</span>
           </div>
@@ -233,6 +247,18 @@
               <span>Also show in Best Seller</span>
               <p class="meta">Sets subcategory_id to 3 (Best Seller category) and keeps existing media.</p>
             </div>
+          </label>
+        </div>
+
+        <div class="modal-section">
+          <h3>Media Storage</h3>
+          <label class="field">
+            <span>Media Provider</span>
+            <select name="media_provider" id="editMediaProvider">
+              <option value="local">Local Storage</option>
+              <option value="cloudinary">Cloudinary</option>
+              <option value="aws_s3">AWS S3</option>
+            </select>
           </label>
         </div>
 
