@@ -6,7 +6,6 @@ const PRODUCTS_LIMIT = 50;
 let currentPage = 1;
 let totalProductPages = 1;
 let isLoadingProducts = false;
-
 let categories = [];
 const BEST_SELLER_SUBCATEGORY_ID = "3";
 const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
@@ -226,41 +225,6 @@ function loadSubcategories(selectedSubId) {
 
 if (categorySelectEl) {
   categorySelectEl.addEventListener("change", () => loadSubcategories());
-}
-
-/* =========================
-   LOAD MEDIA PROVIDERS
-========================= */
-
-async function loadMediaProviders() {
-  const mediaProviderSelectEl = document.getElementById("mediaProviderSelect");
-  if (!mediaProviderSelectEl) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/media-providers`);
-    if (!res.ok) {
-      console.warn(`Failed to load media providers: HTTP ${res.status}`);
-      return;
-    }
-
-    const data = await res.json();
-    mediaProviderSelectEl.innerHTML = "";
-
-    if (data.providers && Array.isArray(data.providers)) {
-      data.providers.forEach((provider) => {
-        const option = document.createElement("option");
-        option.value = provider.value;
-        option.textContent = provider.label;
-        if (provider.value === data.default) {
-          option.selected = true;
-        }
-        mediaProviderSelectEl.appendChild(option);
-      });
-    }
-  } catch (err) {
-    console.error("Media Providers Load Error:", err);
-    // Continue with defaults
-  }
 }
 
 /* =========================
@@ -1545,7 +1509,6 @@ window.addQuickVariantBlock = addQuickVariantBlock;
 window.removeQuickVariant = removeQuickVariant;
 
 loadCategories();
-loadMediaProviders();
 loadProducts();
 updateGalleryCounter();
 

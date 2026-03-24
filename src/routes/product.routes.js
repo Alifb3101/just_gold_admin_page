@@ -2,25 +2,46 @@ const router = require("express").Router();
 const pool = require("../config/db");
 const multer = require("multer");
 const path = require("path");
-const MediaService = require("../services/media.service");
+const mediaService = require("../services/mediaService");
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "../../uploads"),
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
+    const sanitized = mediaService.sanitizeFilename(file.originalname);
+    cb(null, Date.now() + "-" + sanitized);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { files: 20 },
+  limits: { 
+    files: 20,
+    fileSize: 5 * 1024 * 1024 // 5MB per file as per media guide
+  },
   fileFilter: (req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
-    allowed.includes(file.mimetype)
-      ? cb(null, true)
-      : cb(new Error("Invalid file type"));
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error(`Invalid file type: ${file.mimetype}`));
+    }
+    cb(null, true);
   }
 });
+
+// Error handling middleware for multer
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "FILE_TOO_LARGE") {
+      return res.status(400).json({ message: "File size exceeds 5MB limit" });
+    }
+    if (err.code === "LIMIT_FILE_COUNT") {
+      return res.status(400).json({ message: "Too many files (max 20)" });
+    }
+  }
+  if (err && err.message) {
+    return res.status(400).json({ message: err.message });
+  }
+  next();
+};
 
 /* ---------------- GET CATEGORIES ---------------- */
 
@@ -42,32 +63,28 @@ router.get("/categories", async (req, res) => {
   res.json(result.rows);
 });
 
-/* ---------------- GET AVAILABLE MEDIA PROVIDERS ---------------- */
-
-router.get("/media-providers", (req, res) => {
-  try {
-    const availableProviders = MediaService.getAvailableProviders();
-    const providers = availableProviders.map((p) => ({
-      value: p,
-      label: MediaService.getProviderName(p),
-    }));
-
-    res.json({
-      providers,
-      default: process.env.DEFAULT_MEDIA_PROVIDER || "imagekit",
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching media providers" });
-  }
-});
-
 /* ---------------- CREATE PRODUCT ---------------- */
 
-router.post("/product", upload.any(), async (req, res) => {
+router.post("/product", handleMulterError, upload.any(), async (req, res) => {
   const client = await pool.connect();
+  const uploadedFilenames = (req.files || []).map(f => f.filename);
 
   try {
+    // Validate input
+    if (!req.body.name || !req.body.name.trim()) {
+      throw new Error("Product name is required");
+    }
+
+    // Validate files if any
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const validation = mediaService.validateFile(file);
+        if (!validation.valid) {
+          throw new Error(validation.error);
+        }
+      }
+    }
+
     await client.query("BEGIN");
 
     const {
@@ -79,17 +96,13 @@ router.post("/product", upload.any(), async (req, res) => {
       ingredients,
       product_model_no,
       subcategory_id,
-      variants,
-      media_provider
+      variants
     } = req.body;
-
-    // Default to ImageKit for new uploads
-    const provider = media_provider || "imagekit";
 
     const product = await client.query(
       `INSERT INTO products
-       (name, slug, description, how_to_apply, benefits, product_description, ingredients, product_model_no, category_id, media_provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       (name, slug, description, how_to_apply, benefits, product_description, ingredients, product_model_no, category_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING id`,
       [
         name,
@@ -100,8 +113,7 @@ router.post("/product", upload.any(), async (req, res) => {
         product_description,
         ingredients,
         product_model_no,
-        subcategory_id || null,
-        provider
+        subcategory_id || null
       ]
     );
 
@@ -120,24 +132,13 @@ router.post("/product", upload.any(), async (req, res) => {
       }
     }
 
-    // Upload gallery and video images using MediaService
+    // Insert gallery and video images
     for (let file of mediaFiles) {
-      try {
-        const uploadResult = await MediaService.uploadFile(
-          file.buffer,
-          file.originalname,
-          provider
-        );
-
-        await client.query(
-          `INSERT INTO product_images (product_id, image_url)
-           VALUES ($1, $2)`,
-          [productId, uploadResult.url]
-        );
-      } catch (uploadErr) {
-        console.error("Media upload error:", uploadErr);
-        throw uploadErr;
-      }
+      await client.query(
+        `INSERT INTO product_images (product_id,image_url)
+         VALUES ($1,$2)`,
+        [productId, "/uploads/" + file.filename]
+      );
     }
 
     const parsedVariants = JSON.parse(variants);
@@ -145,27 +146,13 @@ router.post("/product", upload.any(), async (req, res) => {
     // Insert variants with their main images and model numbers
     for (let i = 0; i < parsedVariants.length; i++) {
       const v = parsedVariants[i];
-      let mainImageUrl = null;
-
-      if (variantMainImages[i]) {
-        try {
-          const uploadResult = await MediaService.uploadFile(
-            variantMainImages[i].buffer,
-            variantMainImages[i].originalname,
-            provider
-          );
-          mainImageUrl = uploadResult.url;
-        } catch (uploadErr) {
-          console.error("Variant image upload error:", uploadErr);
-          throw uploadErr;
-        }
-      }
+      const mainImage = variantMainImages[i] ? "/uploads/" + variantMainImages[i].filename : null;
 
       await client.query(
         `INSERT INTO product_variants
          (product_id, shade, variant_model_no, price, stock, main_image)
          VALUES ($1,$2,$3,$4,$5,$6)`,
-        [productId, v.color, v.variant_model_no, v.price, v.stock, mainImageUrl]
+        [productId, v.color, v.variant_model_no, v.price, v.stock, mainImage]
       );
     }
 
@@ -173,9 +160,26 @@ router.post("/product", upload.any(), async (req, res) => {
     res.json({ message: "Product Added" });
 
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ message: "Error creating product" });
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Rollback error:", rollbackErr.message);
+    }
+
+    // Cleanup uploaded files on error
+    mediaService.cleanupFiles(uploadedFilenames);
+
+    console.error("Product creation error:", err.message);
+    
+    // Return user-friendly error messages
+    if (err.message.includes("JSON")) {
+      return res.status(400).json({ message: "Invalid variant data format" });
+    }
+    if (err.message.includes("required")) {
+      return res.status(400).json({ message: err.message });
+    }
+    
+    res.status(500).json({ message: "Error creating product. Please check your input and try again." });
   } finally {
     client.release();
   }
@@ -271,8 +275,9 @@ router.get("/product/:id-:slug", async (req, res) => {
 
 /* ---------------- UPDATE PRODUCT ---------------- */
 
-router.put("/product/:id", upload.any(), async (req, res) => {
+router.put("/product/:id", handleMulterError, upload.any(), async (req, res) => {
   const client = await pool.connect();
+  const uploadedFilenames = (req.files || []).map(f => f.filename);
 
   try {
     await client.query("BEGIN");
@@ -499,9 +504,17 @@ router.put("/product/:id", upload.any(), async (req, res) => {
     });
 
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ message: "Error updating product" });
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Rollback error:", rollbackErr.message);
+    }
+
+    // Cleanup uploaded files on error
+    mediaService.cleanupFiles(uploadedFilenames);
+
+    console.error("Product update error:", err.message);
+    res.status(500).json({ message: "Error updating product. Please check your input and try again." });
   } finally {
     client.release();
   }
