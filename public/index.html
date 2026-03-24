@@ -105,6 +105,19 @@
         </div>
 
         <div class="panel-section">
+          <h2>Media Storage</h2>
+          <label class="field">
+            <span>Media Provider</span>
+            <select name="media_provider" id="mediaProviderSelect">
+              <option value="imagekit" selected>ImageKit (Recommended)</option>
+              <option value="cloudinary">Cloudinary (Legacy)</option>
+              <option value="local">Local Storage (Development)</option>
+            </select>
+            <p class="meta">Select where to store product images. ImageKit is recommended for production.</p>
+          </label>
+        </div>
+
+        <div class="panel-section">
           <div class="section-head">
             <h2>Gallery</h2>
             <span class="meta">Max 6 images</span>

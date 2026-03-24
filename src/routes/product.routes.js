@@ -2,6 +2,7 @@ const router = require("express").Router();
 const pool = require("../config/db");
 const multer = require("multer");
 const path = require("path");
+const MediaService = require("../services/media.service");
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "../../uploads"),
@@ -41,6 +42,26 @@ router.get("/categories", async (req, res) => {
   res.json(result.rows);
 });
 
+/* ---------------- GET AVAILABLE MEDIA PROVIDERS ---------------- */
+
+router.get("/media-providers", (req, res) => {
+  try {
+    const availableProviders = MediaService.getAvailableProviders();
+    const providers = availableProviders.map((p) => ({
+      value: p,
+      label: MediaService.getProviderName(p),
+    }));
+
+    res.json({
+      providers,
+      default: process.env.DEFAULT_MEDIA_PROVIDER || "imagekit",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching media providers" });
+  }
+});
+
 /* ---------------- CREATE PRODUCT ---------------- */
 
 router.post("/product", upload.any(), async (req, res) => {
@@ -58,13 +79,17 @@ router.post("/product", upload.any(), async (req, res) => {
       ingredients,
       product_model_no,
       subcategory_id,
-      variants
+      variants,
+      media_provider
     } = req.body;
+
+    // Default to ImageKit for new uploads
+    const provider = media_provider || "imagekit";
 
     const product = await client.query(
       `INSERT INTO products
-       (name, slug, description, how_to_apply, benefits, product_description, ingredients, product_model_no, category_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       (name, slug, description, how_to_apply, benefits, product_description, ingredients, product_model_no, category_id, media_provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
       [
         name,
@@ -75,7 +100,8 @@ router.post("/product", upload.any(), async (req, res) => {
         product_description,
         ingredients,
         product_model_no,
-        subcategory_id || null
+        subcategory_id || null,
+        provider
       ]
     );
 
@@ -94,13 +120,24 @@ router.post("/product", upload.any(), async (req, res) => {
       }
     }
 
-    // Insert gallery and video images
+    // Upload gallery and video images using MediaService
     for (let file of mediaFiles) {
-      await client.query(
-        `INSERT INTO product_images (product_id,image_url)
-         VALUES ($1,$2)`,
-        [productId, "/uploads/" + file.filename]
-      );
+      try {
+        const uploadResult = await MediaService.uploadFile(
+          file.buffer,
+          file.originalname,
+          provider
+        );
+
+        await client.query(
+          `INSERT INTO product_images (product_id, image_url)
+           VALUES ($1, $2)`,
+          [productId, uploadResult.url]
+        );
+      } catch (uploadErr) {
+        console.error("Media upload error:", uploadErr);
+        throw uploadErr;
+      }
     }
 
     const parsedVariants = JSON.parse(variants);
@@ -108,13 +145,27 @@ router.post("/product", upload.any(), async (req, res) => {
     // Insert variants with their main images and model numbers
     for (let i = 0; i < parsedVariants.length; i++) {
       const v = parsedVariants[i];
-      const mainImage = variantMainImages[i] ? "/uploads/" + variantMainImages[i].filename : null;
+      let mainImageUrl = null;
+
+      if (variantMainImages[i]) {
+        try {
+          const uploadResult = await MediaService.uploadFile(
+            variantMainImages[i].buffer,
+            variantMainImages[i].originalname,
+            provider
+          );
+          mainImageUrl = uploadResult.url;
+        } catch (uploadErr) {
+          console.error("Variant image upload error:", uploadErr);
+          throw uploadErr;
+        }
+      }
 
       await client.query(
         `INSERT INTO product_variants
          (product_id, shade, variant_model_no, price, stock, main_image)
          VALUES ($1,$2,$3,$4,$5,$6)`,
-        [productId, v.color, v.variant_model_no, v.price, v.stock, mainImage]
+        [productId, v.color, v.variant_model_no, v.price, v.stock, mainImageUrl]
       );
     }
 

@@ -229,6 +229,41 @@ if (categorySelectEl) {
 }
 
 /* =========================
+   LOAD MEDIA PROVIDERS
+========================= */
+
+async function loadMediaProviders() {
+  const mediaProviderSelectEl = document.getElementById("mediaProviderSelect");
+  if (!mediaProviderSelectEl) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/media-providers`);
+    if (!res.ok) {
+      console.warn(`Failed to load media providers: HTTP ${res.status}`);
+      return;
+    }
+
+    const data = await res.json();
+    mediaProviderSelectEl.innerHTML = "";
+
+    if (data.providers && Array.isArray(data.providers)) {
+      data.providers.forEach((provider) => {
+        const option = document.createElement("option");
+        option.value = provider.value;
+        option.textContent = provider.label;
+        if (provider.value === data.default) {
+          option.selected = true;
+        }
+        mediaProviderSelectEl.appendChild(option);
+      });
+    }
+  } catch (err) {
+    console.error("Media Providers Load Error:", err);
+    // Continue with defaults
+  }
+}
+
+/* =========================
    LOAD PRODUCTS
 ========================= */
 
@@ -1510,6 +1545,7 @@ window.addQuickVariantBlock = addQuickVariantBlock;
 window.removeQuickVariant = removeQuickVariant;
 
 loadCategories();
+loadMediaProviders();
 loadProducts();
 updateGalleryCounter();
 
