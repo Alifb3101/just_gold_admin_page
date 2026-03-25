@@ -973,7 +973,7 @@ document.getElementById("productForm")
           console.log(`     ${key}: ${value instanceof File ? `File(${value.name}, ${value.size}B)` : value}`);
         }
 
-        const uploadUrl = `http://localhost:5000/api/v1/products/${productId}/upload`;
+        const uploadUrl = `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`;
         console.log(`  📍 Upload URL: ${uploadUrl}`);
         console.log(`  ✅ Method: POST`);
         console.log(`  ✅ Headers: Authorization: Bearer ${token ? '***' + token.slice(-10) : 'NO TOKEN'}`);
@@ -1022,7 +1022,7 @@ document.getElementById("productForm")
           variantImgFormData.append("image", mainImageInput.files[0]);
 
           const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${productId}/upload`,
+            `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`,
             {
               method: "POST",
               headers: {
@@ -1056,7 +1056,7 @@ document.getElementById("productForm")
           variantImgFormData.append("image", secondaryImageInput.files[0]);
 
           const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${productId}/upload`,
+            `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`,
             {
               method: "POST",
               headers: {
@@ -1663,7 +1663,7 @@ document.getElementById("editProductForm")
           const token = localStorage.getItem("adminToken");
           
           const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${editingProductId}/upload`,
+            `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
             {
               method: "POST",
               headers: {
@@ -1703,7 +1703,7 @@ document.getElementById("editProductForm")
             console.log(`     Upload to: /api/v1/products/${editingProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${editingProductId}/upload`,
+              `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1740,7 +1740,7 @@ document.getElementById("editProductForm")
             console.log(`     Upload to: /api/v1/products/${editingProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${editingProductId}/upload`,
+              `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1900,7 +1900,7 @@ if (quickVariantForm) {
             console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload`,
+              `http://localhost:5000/api/v1/products${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1935,7 +1935,7 @@ if (quickVariantForm) {
             console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload`,
+              `http://localhost:5000/api/v1/products${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1997,3 +1997,4 @@ updateGalleryCounter();
 
 // Add first variant block by default
 addVariant();
+
