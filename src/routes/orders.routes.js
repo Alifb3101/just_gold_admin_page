@@ -303,12 +303,44 @@ router.get("/orders/admin/all", authenticateAdmin, async (req, res) => {
 
     const result = await pool.query(mainQuery, params);
 
+    // Format orders to match the expected response structure
+    const formattedOrders = result.rows.map(order => ({
+      id: order.id,
+      order_number: order.order_number,
+      order_status: order.order_status,
+      is_guest_order: order.is_guest_order,
+      customer: {
+        id: order.user_id,
+        name: order.customer_name || 'Guest',
+        email: order.customer_email,
+        phone: order.customer_phone
+      },
+      payment: {
+        method: order.payment_method,
+        status: order.payment_status
+      },
+      pricing: {
+        subtotal: order.subtotal,
+        tax: order.tax,
+        shipping_fee: order.shipping_fee,
+        discount: order.discount,
+        total: order.total_amount,
+        currency: order.currency
+      },
+      items_count: order.items_count,
+      created_at: order.created_at,
+      updated_at: order.updated_at
+    }));
+
     res.json({
-      page,
-      limit,
-      total,
-      total_pages: Math.ceil(total / limit),
-      orders: result.rows
+      success: true,
+      data: formattedOrders,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit)
+      }
     });
   } catch (err) {
     console.error("Error fetching admin orders:", err);
@@ -349,18 +381,11 @@ router.get("/orders/admin/:orderId", authenticateAdmin, async (req, res) => {
         u.name AS user_name,
         u.email AS user_email,
         u.phone AS user_phone,
-        CASE 
-          WHEN o.is_guest_order THEN o.guest_full_name
-          ELSE u.name
-        END AS customer_name,
-        CASE 
-          WHEN o.is_guest_order THEN o.guest_email
-          ELSE u.email
-        END AS customer_email,
-        CASE 
-          WHEN o.is_guest_order THEN o.guest_phone
-          ELSE u.phone
-        END AS customer_phone
+        (
+          SELECT COUNT(*)::int
+          FROM order_items oi
+          WHERE oi.order_id = o.id
+        ) AS items_count
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
       WHERE o.id = $1
@@ -391,24 +416,63 @@ router.get("/orders/admin/:orderId", authenticateAdmin, async (req, res) => {
       WHERE oi.order_id = $1
     `, [orderId]);
 
-    // Get status history
-    const historyResult = await pool.query(`
-      SELECT 
-        old_order_status,
-        new_order_status,
-        old_financial_status,
-        new_financial_status,
-        changed_at
-      FROM order_status_history
-      WHERE order_id = $1
-      ORDER BY changed_at DESC
-    `, [orderId]);
+    // Parse shipping address
+    let shippingAddress = {};
+    try {
+      if (order.shipping_address_json) {
+        shippingAddress = typeof order.shipping_address_json === 'string' 
+          ? JSON.parse(order.shipping_address_json) 
+          : order.shipping_address_json;
+      }
+    } catch (parseErr) {
+      console.warn('Failed to parse shipping_address_json:', parseErr);
+    }
 
-    res.json({
-      ...order,
-      items: itemsResult.rows,
-      status_history: historyResult.rows
-    });
+    // Format response to match the API structure exactly
+    const formattedResponse = {
+      id: order.id,
+      order_number: order.order_number,
+      is_guest_order: order.is_guest_order,
+      customer: {
+        id: order.user_id,
+        name: order.is_guest_order ? order.guest_full_name : (order.user_name || 'Guest'),
+        email: order.is_guest_order ? order.guest_email : order.user_email,
+        phone: order.is_guest_order ? order.guest_phone : order.user_phone
+      },
+      payment: {
+        method: order.payment_method || 'cod',
+        status: order.payment_status || 'pending',
+        financial_status: order.financial_status || 'unpaid',
+        transaction_id: null
+      },
+      pricing: {
+        subtotal: parseFloat(order.subtotal) || 0,
+        tax: parseFloat(order.tax) || 0,
+        shipping_fee: parseFloat(order.shipping_fee) || 0,
+        discount: parseFloat(order.discount) || 0,
+        total: parseFloat(order.total_amount) || 0,
+        currency: order.currency || 'AED'
+      },
+      order_status: order.order_status || 'pending',
+      items_count: order.items_count || 0,
+      shipping_address: shippingAddress,
+      items: (itemsResult.rows || []).map(item => ({
+        id: item.id,
+        product_name_snapshot: item.product_name_snapshot,
+        price_snapshot: parseFloat(item.price_snapshot) || 0,
+        quantity: item.quantity,
+        total_price: parseFloat(item.total_price) || 0,
+        variant_id: item.variant_id,
+        shade: item.shade,
+        variant_image: item.variant_image,
+        product_id: item.product_id,
+        product_name: item.product_name
+      })),
+      created_at: order.created_at,
+      updated_at: order.updated_at
+    };
+
+    res.json(formattedResponse);
   } catch (err) {
     console.error("Error fetching admin order:", err);
     res.status(500).json({ message: "Error fetching order" });

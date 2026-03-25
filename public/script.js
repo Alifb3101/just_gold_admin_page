@@ -8,6 +8,10 @@ let categories = [];
 const BEST_SELLER_SUBCATEGORY_ID = "3";
 const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
 
+// Media Provider Settings - MUST be initialized with default
+let currentMediaProvider = 'imagekit';  // Default provider
+let availableProviders = ['cloudinary', 'imagekit'];
+
 const categorySelectEl = document.getElementById("categorySelect");
 const subcategorySelectEl = document.getElementById("subcategorySelect");
 const categoryStatusEl = document.getElementById("categoryStatus");
@@ -1974,6 +1978,28 @@ if (quickVariantForm) {
 }
 
 /* =========================
+   MEDIA PROVIDER SETTINGS
+========================= */
+
+async function fetchMediaProviderSettings() {
+  try {
+    const response = await fetchWithAuth('/settings/media-provider');
+    if (response && response.ok) {
+      const data = await response.json();
+      currentMediaProvider = data.provider || 'imagekit';
+      availableProviders = data.availableProviders || ['cloudinary', 'imagekit'];
+      console.log('📡 Media Provider Settings loaded:', {
+        current: currentMediaProvider,
+        available: availableProviders
+      });
+    }
+  } catch (error) {
+    console.warn('⚠️  Failed to fetch media provider, using default:', error.message);
+    // Continue with default initialized at top of file
+  }
+}
+
+/* =========================
    INIT
 ========================= */
 
@@ -1991,6 +2017,8 @@ window.closeQuickVariantModal = closeQuickVariantModal;
 window.addQuickVariantBlock = addQuickVariantBlock;
 window.removeQuickVariant = removeQuickVariant;
 
+// Load initial data
+fetchMediaProviderSettings();  // Load media provider before any uploads
 loadCategories();
 loadProducts();
 updateGalleryCounter();

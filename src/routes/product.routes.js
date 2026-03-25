@@ -1,18 +1,21 @@
 const router = require("express").Router();
 const pool = require("../config/db");
 const multer = require("multer");
-const path = require("path");
+const ImageKit = require("imagekit");
 
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, "../../uploads"),
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
+// Initialize ImageKit
+const imagekit = new ImageKit({
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
 });
+
+// Use memory storage instead of disk storage
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
-  limits: { files: 20 },
+  limits: { files: 20, fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
     allowed.includes(file.mimetype)
@@ -20,6 +23,24 @@ const upload = multer({
       : cb(new Error("Invalid file type"));
   }
 });
+
+// Helper function to upload file to ImageKit
+async function uploadToImageKit(file, folder = "just-gold") {
+  try {
+    console.log(`[ImageKit] Uploading file: ${file.originalname} to ImageKit...`);
+    const response = await imagekit.upload({
+      file: file.buffer,
+      fileName: `${Date.now()}-${file.originalname}`,
+      folder: `/products/${folder}`,
+      tags: ["just-gold-admin"]
+    });
+    console.log(`[ImageKit] ✅ Upload successful: ${response.url}`);
+    return response.url;
+  } catch (err) {
+    console.error("[ImageKit] ❌ Upload failed:", err.message);
+    throw new Error(`Failed to upload file: ${err.message}`);
+  }
+}
 
 /* ---------------- GET CATEGORIES ---------------- */
 
@@ -43,10 +64,14 @@ router.get("/categories", async (req, res) => {
 
 /* ---------------- CREATE PRODUCT ---------------- */
 
-router.post("/product", upload.any(), async (req, res) => {
+router.post("/products", upload.any(), async (req, res) => {
   const client = await pool.connect();
 
   try {
+    console.log("[Product Upload] 📝 Creating new product...");
+    const files = Array.isArray(req.files) ? req.files : [];
+    console.log(`[Product Upload] Files received: ${files.length}`);
+    
     await client.query("BEGIN");
 
     const {
@@ -80,12 +105,13 @@ router.post("/product", upload.any(), async (req, res) => {
     );
 
     const productId = product.rows[0].id;
+    console.log(`[Product Upload] ✅ Product created with ID: ${productId}`);
 
     // Separate media files and variant main images
     const mediaFiles = [];
     const variantMainImages = {};
 
-    for (let file of req.files) {
+    for (let file of files) {
       if (file.fieldname === "media") {
         mediaFiles.push(file);
       } else if (file.fieldname.startsWith("variant_main_image_")) {
@@ -94,21 +120,34 @@ router.post("/product", upload.any(), async (req, res) => {
       }
     }
 
-    // Insert gallery and video images
+    // Upload gallery and video images to ImageKit
     for (let file of mediaFiles) {
-      await client.query(
-        `INSERT INTO product_images (product_id,image_url)
-         VALUES ($1,$2)`,
-        [productId, "/uploads/" + file.filename]
-      );
+      try {
+        const imageUrl = await uploadToImageKit(file, "gallery");
+        await client.query(
+          `INSERT INTO product_images (product_id, image_url)
+           VALUES ($1, $2)`,
+          [productId, imageUrl]
+        );
+      } catch (uploadErr) {
+        throw uploadErr;
+      }
     }
 
-    const parsedVariants = JSON.parse(variants);
+    const parsedVariants = variants ? JSON.parse(variants) : [];
 
-    // Insert variants with their main images and model numbers
+    // Insert variants with their main images uploaded to ImageKit
     for (let i = 0; i < parsedVariants.length; i++) {
       const v = parsedVariants[i];
-      const mainImage = variantMainImages[i] ? "/uploads/" + variantMainImages[i].filename : null;
+      let mainImage = null;
+      
+      if (variantMainImages[i]) {
+        try {
+          mainImage = await uploadToImageKit(variantMainImages[i], "variants");
+        } catch (uploadErr) {
+          throw uploadErr;
+        }
+      }
 
       await client.query(
         `INSERT INTO product_variants
@@ -119,12 +158,13 @@ router.post("/product", upload.any(), async (req, res) => {
     }
 
     await client.query("COMMIT");
+    console.log(`[Product Upload] ✅ Product saved successfully!`);
     res.json({ message: "Product Added" });
 
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ message: "Error creating product" });
+    console.error("[Product Upload] ❌ Error:", err.message);
+    res.status(500).json({ message: "Error creating product", details: err.message });
   } finally {
     client.release();
   }
@@ -165,14 +205,14 @@ router.get("/products", async (req, res) => {
 
 /* ---------------- DELETE ---------------- */
 
-router.delete("/product/:id", async (req, res) => {
+router.delete("/products/:id", async (req, res) => {
   await pool.query("DELETE FROM products WHERE id=$1", [req.params.id]);
   res.json({ message: "Deleted" });
 });
 
 /* ---------------- GET SINGLE PRODUCT ---------------- */
 
-router.get("/product/:id-:slug", async (req, res) => {
+router.get("/products/:id-:slug", async (req, res) => {
   try {
     const productId = parseInt(req.params.id, 10);
     const slugParam = req.params.slug;
@@ -196,7 +236,7 @@ router.get("/product/:id-:slug", async (req, res) => {
     const canonicalSlug = product.slug;
     const canonical = canonicalSlug === slugParam
       ? null
-      : `/api/v1/product/${product.id}-${canonicalSlug}`;
+      : `/api/v1/products/${product.id}-${canonicalSlug}`;
 
     const variantsResult = await pool.query(`
       SELECT * FROM product_variants WHERE product_id = $1
@@ -220,10 +260,13 @@ router.get("/product/:id-:slug", async (req, res) => {
 
 /* ---------------- UPDATE PRODUCT ---------------- */
 
-router.put("/product/:id", upload.any(), async (req, res) => {
+router.put("/products/:id", upload.any(), async (req, res) => {
   const client = await pool.connect();
 
   try {
+    console.log(`[Product Update] 🔄 Updating product ID: ${req.params.id}`);
+    console.log(`[Product Update] Files received: ${req.files ? req.files.length : 0}`);
+    
     await client.query("BEGIN");
 
     const productId = req.params.id;
@@ -290,7 +333,7 @@ router.put("/product/:id", upload.any(), async (req, res) => {
     if (updates.length > 0) {
       values.push(productId);
       await client.query(
-        `UPDATE products SET ${updates.join(", ")}, updated_at = NOW() WHERE id = $${paramIndex}`,
+        `UPDATE products SET ${updates.join(", ")} WHERE id = $${paramIndex}`,
         values
       );
     }
@@ -312,12 +355,17 @@ router.put("/product/:id", upload.any(), async (req, res) => {
       }
     }
 
-    // Add new gallery images
+    // Add new gallery images to ImageKit
     for (let file of newGalleryFiles) {
-      await client.query(
-        `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`,
-        [productId, "/uploads/" + file.filename]
-      );
+      try {
+        const imageUrl = await uploadToImageKit(file, "gallery");
+        await client.query(
+          `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`,
+          [productId, imageUrl]
+        );
+      } catch (uploadErr) {
+        throw uploadErr;
+      }
     }
 
     // Delete media by IDs
@@ -348,8 +396,25 @@ router.put("/product/:id", upload.any(), async (req, res) => {
 
       for (let i = 0; i < parsedVariants.length; i++) {
         const v = parsedVariants[i];
-        const mainImage = variantMainImages[i] ? "/uploads/" + variantMainImages[i].filename : null;
-        const secondaryImage = variantSecondaryImages[i] ? "/uploads/" + variantSecondaryImages[i].filename : null;
+        let mainImage = null;
+        let secondaryImage = null;
+
+        // Upload variant images to ImageKit if provided
+        if (variantMainImages[i]) {
+          try {
+            mainImage = await uploadToImageKit(variantMainImages[i], "variants");
+          } catch (uploadErr) {
+            throw uploadErr;
+          }
+        }
+
+        if (variantSecondaryImages[i]) {
+          try {
+            secondaryImage = await uploadToImageKit(variantSecondaryImages[i], "variants");
+          } catch (uploadErr) {
+            throw uploadErr;
+          }
+        }
 
         if (v.id) {
           // Update existing variant
@@ -450,7 +515,7 @@ router.put("/product/:id", upload.any(), async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
-    res.status(500).json({ message: "Error updating product" });
+    res.status(500).json({ message: "Error updating product", details: err.message });
   } finally {
     client.release();
   }

@@ -322,6 +322,32 @@
   </div>
 </div>
 
+<script src="auth-config.js"></script>
+<script>
+  // Require authentication before loading page
+  requireAuth();
+  
+  // Add logout button handler
+  document.addEventListener('DOMContentLoaded', () => {
+    const adminUser = getAdminUser();
+    if (adminUser) {
+      // Find or create an admin info display
+      const heroActions = document.querySelector('.hero-actions');
+      if (heroActions) {
+        const logoutBtn = document.createElement('button');
+        logoutBtn.className = 'nav-btn';
+        logoutBtn.style.background = '#f85757';
+        logoutBtn.style.color = 'white';
+        logoutBtn.textContent = `Logout (${adminUser.email || 'Admin'})`;
+        logoutBtn.onclick = (e) => {
+          e.preventDefault();
+          logout();
+        };
+        heroActions.appendChild(logoutBtn);
+      }
+    }
+  });
+</script>
 <script src="script.js"></script>
 </body>
 </html>

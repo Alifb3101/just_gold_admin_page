@@ -1,5 +1,4 @@
 // Orders Management
-const API_BASE = '/api/v1';
 
 let currentPage = 1;
 let totalPages = 1;
@@ -15,6 +14,7 @@ const orderModal = document.getElementById('orderModal');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+  requireAuth();
   loadOrders();
   setupEventListeners();
 });
@@ -58,6 +58,7 @@ async function loadOrders() {
   const params = new URLSearchParams({
     page: currentPage,
     limit: 20,
+    _test_admin_id: 1,  // For testing - remove in production with real JWT
     ...currentFilters
   });
 
@@ -67,18 +68,14 @@ async function loadOrders() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/orders/admin/all?${params}`, {
-      headers: {
-        'Authorization': 'Bearer ADMIN_TOKEN'
-      }
-    });
+    const response = await fetchWithAuth(`/orders/admin/all?${params}`);
 
-    if (!response.ok) throw new Error('Failed to load orders');
+    if (!response) return; // fetchWithAuth handles 401 and redirects
 
-    const data = await response.json();
-    renderOrders(data.orders);
-    updatePagination(data);
-    orderCount.textContent = `${data.total} orders`;
+    const result = await response.json();
+    renderOrders(result.data);
+    updatePagination(result);
+    orderCount.textContent = `${result.pagination.total} orders`;
 
   } catch (error) {
     console.error('Error loading orders:', error);
@@ -97,17 +94,17 @@ function renderOrders(orders) {
       <td><strong>${order.order_number}</strong></td>
       <td>
         <div class="customer-info">
-          <span class="customer-name">${order.customer_name || 'Guest'}</span>
-          <span class="customer-email">${order.customer_email || '-'}</span>
+          <span class="customer-name">${order.customer.name || 'Guest'}</span>
+          <span class="customer-email">${order.customer.email || '-'}</span>
         </div>
       </td>
       <td>${formatDate(order.created_at)}</td>
       <td><span class="status-badge status-${order.order_status}">${order.order_status}</span></td>
       <td>
-        <span class="status-badge payment-${order.payment_status}">${order.payment_status}</span>
-        <br><small>${order.payment_method.toUpperCase()}</small>
+        <span class="status-badge payment-${order.payment.status}">${order.payment.status}</span>
+        <br><small>${order.payment.method.toUpperCase()}</small>
       </td>
-      <td><strong>${order.currency} ${parseFloat(order.total_amount).toFixed(2)}</strong></td>
+      <td><strong>${order.pricing.currency} ${parseFloat(order.pricing.total).toFixed(2)}</strong></td>
       <td>
         <button class="action-btn view-btn" onclick="viewOrder('${order.id}')">View</button>
       </td>
@@ -115,9 +112,9 @@ function renderOrders(orders) {
   `).join('');
 }
 
-function updatePagination(data) {
-  totalPages = data.total_pages || 1;
-  currentPage = data.page;
+function updatePagination(result) {
+  totalPages = result.pagination.total_pages || 1;
+  currentPage = result.pagination.page;
 
   paginationInfo.textContent = `Page ${currentPage} of ${totalPages}`;
   prevPageBtn.disabled = currentPage <= 1;
@@ -155,13 +152,9 @@ async function viewOrder(orderId) {
   orderModal.classList.add('active');
 
   try {
-    const response = await fetch(`${API_BASE}/orders/admin/${orderId}`, {
-      headers: {
-        'Authorization': 'Bearer ADMIN_TOKEN'
-      }
-    });
+    const response = await fetchWithAuth(`/orders/admin/${orderId}?_test_admin_id=1`);
 
-    if (!response.ok) throw new Error('Failed to load order');
+    if (!response) return; // fetchWithAuth handles 401 and redirects
 
     const order = await response.json();
     renderOrderDetail(order);
@@ -173,9 +166,19 @@ async function viewOrder(orderId) {
 }
 
 function renderOrderDetail(order) {
-  document.getElementById('modalOrderNumber').textContent = order.order_number;
+  // Validate and normalize order data
+  if (!order || typeof order !== 'object') {
+    document.getElementById('orderDetailContent').innerHTML = '<p>Error: Invalid order data</p>';
+    return;
+  }
+
+  // Set safe defaults for nested objects
+  const payment = order.payment || { method: 'N/A', status: 'N/A', financial_status: 'N/A' };
+  const pricing = order.pricing || { subtotal: 0, tax: 0, shipping_fee: 0, discount: 0, total: 0, currency: 'AED' };
+  const customer = order.customer || { name: 'Guest', email: 'N/A', phone: 'N/A' };
+  const address = order.shipping_address || {};
   
-  const address = order.shipping_address_json || {};
+  document.getElementById('modalOrderNumber').textContent = order.order_number || 'N/A';
   
   document.getElementById('orderDetailContent').innerHTML = `
     <div class="detail-section">
@@ -183,23 +186,23 @@ function renderOrderDetail(order) {
       <div class="detail-grid">
         <div class="detail-item">
           <span class="detail-label">Order Number</span>
-          <span class="detail-value">${order.order_number}</span>
+          <span class="detail-value">${order.order_number || 'N/A'}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Date</span>
-          <span class="detail-value">${formatDateTime(order.created_at)}</span>
+          <span class="detail-value">${formatDateTime(order.created_at) || 'N/A'}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Order Status</span>
           <span class="detail-value">
-            <span class="status-badge status-${order.order_status}">${order.order_status}</span>
+            <span class="status-badge status-${order.order_status || 'pending'}">${order.order_status || 'N/A'}</span>
           </span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Payment</span>
           <span class="detail-value">
-            <span class="status-badge payment-${order.payment_status}">${order.payment_status}</span>
-            (${order.payment_method.toUpperCase()})
+            <span class="status-badge payment-${payment.status || 'pending'}">${payment.status || 'N/A'}</span>
+            (${(payment.method || 'N/A').toUpperCase()})
           </span>
         </div>
       </div>
@@ -223,15 +226,15 @@ function renderOrderDetail(order) {
       <div class="detail-grid">
         <div class="detail-item">
           <span class="detail-label">Name</span>
-          <span class="detail-value">${order.customer_name || 'N/A'}</span>
+          <span class="detail-value">${customer.name || 'N/A'}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Email</span>
-          <span class="detail-value">${order.customer_email || 'N/A'}</span>
+          <span class="detail-value">${customer.email || 'N/A'}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Phone</span>
-          <span class="detail-value">${order.customer_phone || 'N/A'}</span>
+          <span class="detail-value">${customer.phone || 'N/A'}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Type</span>
@@ -263,17 +266,17 @@ function renderOrderDetail(order) {
     </div>
 
     <div class="detail-section">
-      <h3>Items (${order.items?.length || 0})</h3>
+      <h3>Items (${(order.items || []).length})</h3>
       <div class="order-items-list">
         ${(order.items || []).map(item => `
           <div class="order-item">
-            <img class="order-item-image" src="${item.variant_image || '/uploads/placeholder.png'}" alt="${item.product_name_snapshot}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3ede1%22 width=%22100%22 height=%22100%22/></svg>'">
+            <img class="order-item-image" src="${item.variant_image || '/placeholder.jpg'}" alt="${item.product_name_snapshot || 'Product'}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3ede1%22 width=%22100%22 height=%22100%22/></svg>'">
             <div class="order-item-details">
-              <span class="order-item-name">${item.product_name_snapshot}</span>
-              <span class="order-item-variant">${item.shade ? `Shade: ${item.shade}` : ''} × ${item.quantity}</span>
+              <span class="order-item-name">${item.product_name_snapshot || 'N/A'}</span>
+              <span class="order-item-variant">${item.shade ? `Shade: ${item.shade}` : ''} × ${item.quantity || 1}</span>
             </div>
             <div class="order-item-price">
-              ${order.currency} ${parseFloat(item.total_price).toFixed(2)}
+              ${pricing.currency} ${parseFloat(item.total_price || 0).toFixed(2)}
             </div>
           </div>
         `).join('')}
@@ -285,23 +288,23 @@ function renderOrderDetail(order) {
       <div class="detail-grid">
         <div class="detail-item">
           <span class="detail-label">Subtotal</span>
-          <span class="detail-value">${order.currency} ${parseFloat(order.subtotal).toFixed(2)}</span>
+          <span class="detail-value">${pricing.currency} ${parseFloat(pricing.subtotal).toFixed(2)}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Shipping</span>
-          <span class="detail-value">${order.currency} ${parseFloat(order.shipping_fee).toFixed(2)}</span>
+          <span class="detail-value">${pricing.currency} ${parseFloat(pricing.shipping_fee).toFixed(2)}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Tax</span>
-          <span class="detail-value">${order.currency} ${parseFloat(order.tax).toFixed(2)}</span>
+          <span class="detail-value">${pricing.currency} ${parseFloat(pricing.tax).toFixed(2)}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Discount</span>
-          <span class="detail-value">- ${order.currency} ${parseFloat(order.discount).toFixed(2)}</span>
+          <span class="detail-value">- ${pricing.currency} ${parseFloat(pricing.discount).toFixed(2)}</span>
         </div>
         <div class="detail-item">
           <span class="detail-label"><strong>Total</strong></span>
-          <span class="detail-value"><strong>${order.currency} ${parseFloat(order.total_amount).toFixed(2)}</strong></span>
+          <span class="detail-value"><strong>${pricing.currency} ${parseFloat(pricing.total).toFixed(2)}</strong></span>
         </div>
       </div>
     </div>
@@ -316,12 +319,8 @@ async function updateOrderStatus(orderId) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/orders/admin/${orderId}/status`, {
+    const response = await fetchWithAuth(`/orders/admin/${orderId}/status?_test_admin_id=1`, {
       method: 'PATCH',
-      headers: {
-        'Authorization': 'Bearer ADMIN_TOKEN',
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({ order_status: newStatus })
     });
 
@@ -363,3 +362,4 @@ function formatDateTime(dateStr) {
     minute: '2-digit'
   });
 }
+
