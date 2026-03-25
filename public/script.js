@@ -1118,7 +1118,7 @@ async function deleteProduct(id) {
   if (!confirm("Delete this product?")) return;
 
   try {
-    await fetchWithAuth(`/product/${id}`, {
+    await fetchWithAuth(`/products/${id}`, {
       method: "DELETE"
     });
 
@@ -1176,7 +1176,7 @@ async function editProduct(slug, productId) {
 
   try {
     console.log("Fetching product by slug:", slug);
-    const res = await fetchWithAuth(`/product/${productId}-${slug}`);
+    const res = await fetchWithAuth(`/products/${productId}-${slug}`);
     
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
