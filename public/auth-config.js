@@ -3,7 +3,8 @@
  * Handles JWT token management and authenticated API calls
  */
 
-const API_BASE = 'http://localhost:3001/api/v1';
+// Use backend API host (server runs on 5000)
+const API_BASE = 'http://localhost:5000/api/v1';
 
 // Get auth headers with token
 function getAuthHeaders() {

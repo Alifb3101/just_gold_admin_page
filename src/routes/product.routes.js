@@ -1,14 +1,8 @@
 const router = require("express").Router();
 const pool = require("../config/db");
 const multer = require("multer");
-const ImageKit = require("imagekit");
 
 // Initialize ImageKit
-const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
-});
 
 // Use memory storage instead of disk storage
 const storage = multer.memoryStorage();
@@ -25,19 +19,45 @@ const upload = multer({
 });
 
 // Helper function to upload file to ImageKit
-async function uploadToImageKit(file, folder = "just-gold") {
+// Helper function to upload file to S3 (ImageKit will serve it)
+const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const s3 = require("../config/s3"); // make sure you already created this
+
+async function uploadToImageKit(file, type = "images") {
   try {
-    console.log(`[ImageKit] Uploading file: ${file.originalname} to ImageKit...`);
-    const response = await imagekit.upload({
-      file: file.buffer,
-      fileName: `${Date.now()}-${file.originalname}`,
-      folder: `/products/${folder}`,
-      tags: ["just-gold-admin"]
-    });
-    console.log(`[ImageKit] ✅ Upload successful: ${response.url}`);
-    return response.url;
+    console.log(`[S3] Uploading file: ${file.originalname}...`);
+
+    // safer extension extraction
+    const ext = file.mimetype.split("/")[1] || "jpg";
+
+    // clean filename
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+
+    // FIXED folder structure
+    const folderMap = {
+      gallery: "just_gold/products/images",
+      variants: "just_gold/products/variants"
+    };
+
+    const folder = folderMap[type] || "just_gold/products/images";
+
+    const key = `${folder}/${fileName}`;
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      })
+    );
+
+    console.log(`[S3] ✅ Upload successful: ${key}`);
+
+    return key;
+
   } catch (err) {
-    console.error("[ImageKit] ❌ Upload failed:", err.message);
+    console.error("[S3] ❌ Upload failed:", err.message);
     throw new Error(`Failed to upload file: ${err.message}`);
   }
 }
@@ -162,7 +182,11 @@ router.post("/products", upload.any(), async (req, res) => {
     res.json({ message: "Product Added" });
 
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("[Product Upload] ❌ Rollback Error:", rollbackErr.message);
+    }
     console.error("[Product Upload] ❌ Error:", err.message);
     res.status(500).json({ message: "Error creating product", details: err.message });
   } finally {

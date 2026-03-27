@@ -9,7 +9,7 @@ const BEST_SELLER_SUBCATEGORY_ID = "3";
 const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
 
 // Media Provider Settings - MUST be initialized with default
-let currentMediaProvider = 'imagekit';  // Default provider
+let currentMediaProvider = 'imagekit';  // Default provider (AWS/ImageKit)
 let availableProviders = ['cloudinary', 'imagekit'];
 
 const categorySelectEl = document.getElementById("categorySelect");
@@ -928,7 +928,7 @@ document.getElementById("productForm")
     console.log("📤 Sending Product Payload to API:");
     console.log(JSON.stringify(productPayload, null, 2));
 
-    const createResponse = await fetchWithAuth(`/product`, {
+    const createResponse = await fetchWithAuth(`/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(productPayload)
@@ -1983,7 +1983,13 @@ if (quickVariantForm) {
 
 async function fetchMediaProviderSettings() {
   try {
-    const response = await fetchWithAuth('/settings/media-provider');
+    const token = localStorage.getItem('adminToken');
+    const response = await fetch('http://localhost:5000/api/v1/settings/media-provider', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
     if (response && response.ok) {
       const data = await response.json();
       currentMediaProvider = data.provider || 'imagekit';
