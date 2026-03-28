@@ -906,40 +906,32 @@ document.getElementById("productForm")
 
   console.log("✅ VALIDATION PASSED: All required fields present");
 
-  /* ---- Create Product (JSON only, no files) ---- */
+  /* ---- Create Product (multipart with files + variants) ---- */
 
   try {
-    // Step 1: Create product with JSON data
-    const productPayload = {
-      name: productName,
-      base_price: parseFloat(basePrice),
-      description: formData.get("description")?.trim() || null,
-      how_to_apply: formData.get("how_to_apply")?.trim() || null,
-      benefits: formData.get("benefits")?.trim() || null,
-      product_description: formData.get("product_description")?.trim() || null,
-      ingredients: formData.get("ingredients")?.trim() || null,
-      product_model_no: formData.get("product_model_no")?.trim() || null
-    };
+    // Keep provider explicit and send all selected gallery files in the same create request.
+    formData.set("media_provider", currentMediaProvider);
+    formData.set("base_price", String(parseFloat(basePrice)));
+    formData.set("variants", JSON.stringify(variants));
 
-    // Send category_id if no subcategory, otherwise send subcategory_id
-    if (subcategoryId) {
-      productPayload.subcategory_id = parseInt(subcategoryId, 10);
-    } else if (categoryId) {
-      productPayload.category_id = parseInt(categoryId, 10);
+    selectedImages.forEach((imageItem) => {
+      formData.append("gallery", imageItem.file);
+    });
+
+    console.log("📤 Sending multipart create request with variant file keys");
+    console.log("  Provider:", currentMediaProvider);
+    console.log("  Variants:", variants.length);
+    console.log("  Gallery files:", selectedImages.length);
+    console.log("  File keys:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`    - ${key}: ${value.name}`);
+      }
     }
-
-    // Add variants if any
-    if (variants && variants.length > 0) {
-      productPayload.variants = JSON.stringify(variants);
-    }
-
-    console.log("📤 Sending Product Payload to API:");
-    console.log(JSON.stringify(productPayload, null, 2));
 
     const createResponse = await fetchWithAuth(`/products`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(productPayload)
+      body: formData
     });
 
     if (!createResponse) {
@@ -949,7 +941,6 @@ document.getElementById("productForm")
     }
 
     const createResult = await createResponse.json();
-
     console.log("📥 API Response Status:", createResponse.status);
     console.log("📥 API Response:", createResult);
 
@@ -960,143 +951,6 @@ document.getElementById("productForm")
       return;
     }
 
-    const productId = createResult.id;
-    console.log("✅ Product created with ID:", productId);
-
-    // Step 2: Upload gallery images one by one
-    console.log(`🖼️ STARTING GALLERY IMAGE UPLOAD (${selectedImages.length} images)`);
-    
-    for (const imageItem of selectedImages) {
-      try {
-        const imgFormData = new FormData();
-        imgFormData.append("image", imageItem.file);
-
-        console.log(`  📤 Uploading gallery image: ${imageItem.file.name}`);
-        console.log(`     File size: ${(imageItem.file.size / 1024).toFixed(2)}KB`);
-        console.log(`     File type: ${imageItem.file.type}`);
-
-        const token = localStorage.getItem("adminToken");
-        console.log(`  🔐 Token present: ${!!token}`);
-        console.log(`     Token length: ${token ? token.length : 0}`);
-        
-        // Debug: Show FormData contents
-        console.log("  📦 FormData contents:");
-        for (let [key, value] of imgFormData.entries()) {
-          console.log(`     ${key}: ${value instanceof File ? `File(${value.name}, ${value.size}B)` : value}`);
-        }
-
-        const uploadUrl = `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`;
-        console.log(`  📍 Upload URL: ${uploadUrl}`);
-        console.log(`  ✅ Method: POST`);
-        console.log(`  ✅ Headers: Authorization: Bearer ${token ? '***' + token.slice(-10) : 'NO TOKEN'}`);
-        
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`
-          },
-          body: imgFormData
-        });
-
-        console.log(`  📥 Response Status: ${uploadResponse.status} ${uploadResponse.statusText}`);
-
-        if (!uploadResponse.ok) {
-          const error = await uploadResponse.json();
-          console.error(`  ❌ Image upload failed [${uploadResponse.status}]:`, error);
-        } else {
-          const uploadResult = await uploadResponse.json();
-          console.log(`  ✅ Image uploaded successfully:`, uploadResult);
-          console.log(`     - image_key: ${uploadResult.image_key}`);
-          console.log(`     - media_provider: ${uploadResult.media_provider}`);
-          console.log(`     - image_url: ${uploadResult.image_url}`);
-        }
-      } catch (tmpError) {
-        console.error("❌ Error uploading image:", tmpError);
-      }
-    }
-
-    // Step 3: Upload variant images
-    console.log(`🎨 STARTING VARIANT IMAGE UPLOAD`);
-    const variantElements = document.querySelectorAll(".variant");
-    console.log(`  Found ${variantElements.length} variants`);
-    
-    for (let i = 0; i < variantElements.length; i++) {
-      const div = variantElements[i];
-      const mainImageInput = div.querySelector(".main-image");
-      const secondaryImageInput = div.querySelector(".secondary-image");
-      const token = localStorage.getItem("adminToken");
-
-      // Upload main image
-      if (mainImageInput.files[0]) {
-        try {
-          console.log(`  📤 Uploading variant ${i + 1} main image: ${mainImageInput.files[0].name}`);
-          const variantImgFormData = new FormData();
-          variantImgFormData.append("image", mainImageInput.files[0]);
-
-          const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`,
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${token}`
-              },
-              body: variantImgFormData
-            }
-          );
-
-          console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-          if (!uploadResponse.ok) {
-            const error = await uploadResponse.json();
-            console.error(`  ❌ Variant image upload failed [${uploadResponse.status}]:`, error);
-          } else {
-            const uploadResult = await uploadResponse.json();
-            console.log(`  ✅ Variant ${i + 1} main image uploaded:`, uploadResult);
-            console.log(`     - image_key: ${uploadResult.image_key}`);
-            console.log(`     - image_url: ${uploadResult.image_url}`);
-          }
-        } catch (tmpError) {
-          console.error(`  ❌ Error uploading variant ${i + 1} main image:`, tmpError);
-        }
-      }
-
-      // Upload secondary image
-      if (secondaryImageInput.files[0]) {
-        try {
-          console.log(`  📤 Uploading variant ${i + 1} secondary image: ${secondaryImageInput.files[0].name}`);
-          const variantImgFormData = new FormData();
-          variantImgFormData.append("image", secondaryImageInput.files[0]);
-
-          const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${productId}/upload?mediaProvider=${currentMediaProvider}`,
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${token}`
-              },
-              body: variantImgFormData
-            }
-          );
-
-          console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-          if (!uploadResponse.ok) {
-            const error = await uploadResponse.json();
-            console.error(`  ❌ Secondary image upload failed [${uploadResponse.status}]:`, error);
-          } else {
-            const uploadResult = await uploadResponse.json();
-            console.log(`  ✅ Variant ${i + 1} secondary image uploaded:`, uploadResult);
-            console.log(`     - image_key: ${uploadResult.image_key}`);
-            console.log(`     - image_url: ${uploadResult.image_url}`);
-          }
-        } catch (tmpError) {
-          console.error(`  ❌ Error uploading variant ${i + 1} secondary image:`, tmpError);
-        }
-      }
-    }
-
-    console.log("🎉 ALL IMAGE UPLOADS COMPLETE");
-
     alert("Product Created Successfully");
 
     console.log("📋 Resetting form and reloading product list...");
@@ -1106,8 +960,6 @@ document.getElementById("productForm")
     renderGallery();
     updateGalleryCounter();
     videoMeta.textContent = "";
-
-    console.log("🔄 Loading products to verify uploads...");
     loadProducts(1);
 
   } catch (error) {
