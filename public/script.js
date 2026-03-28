@@ -1911,13 +1911,21 @@ if (quickVariantForm) {
       console.log(`[QUICK VARIANT] Response Body:`, result);
 
       if (!response.ok) {
-        console.error(`[QUICK VARIANT] ❌ Server Error:`, result.message);
-        alert(`Error: ${result.message || "Error adding color variant"}`);
+        console.error(`[QUICK VARIANT] ❌ Server Error [${response.status}]:`);
+        console.error(`  Message: ${result.message}`);
+        console.error(`  Details: ${result.details || 'N/A'}`);
+        console.error(`  Full Response:`, result);
+        alert(`Error: ${result.message || "Error adding color variant"}\n\nDetails: ${result.details || ''}`);
         setButtonLoading(submitBtn, false);
         return;
       }
 
-      console.log(`[QUICK VARIANT] ✅ Variants added successfully`);
+      console.log(`[QUICK VARIANT] ✅ Response Summary:`, {
+        status: response.status,
+        message: result.message,
+        productId: result.productId,
+        variantsAdded: result.variantsAdded
+      });
       alert("Color variant added");
       closeQuickVariantModal();
       loadProducts(currentPage);
