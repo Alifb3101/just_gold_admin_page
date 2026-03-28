@@ -637,7 +637,9 @@ function collectColorPanelData(variantEl, formData, variantIndex) {
   } else if (type === "image") {
     if (imageFileInput && imageFileInput.files[0]) {
       formData.append(`color_panel_image_${variantIndex}`, imageFileInput.files[0]);
-      value = null;
+      // Send a non-empty placeholder for initial JSON validation.
+      // Actual URL/key will be set by backend after processing the uploaded file.
+      value = `__PENDING_UPLOAD__:${imageFileInput.files[0].name}`;
     }
     if ((!value || value === "") && variantEl.dataset.initialPanelValue) {
       value = variantEl.dataset.initialPanelValue;
@@ -1612,30 +1614,18 @@ document.getElementById("editProductForm")
     formData.append("variants", JSON.stringify(variants));
 
     try {
-      // Step 1: Update product with JSON (no files)
-      const editPayload = {
-        name: document.getElementById("editName").value?.trim(),
-        description: document.getElementById("editDescription").value?.trim() || null,
-        how_to_apply: document.getElementById("editHowToApply").value?.trim() || null,
-        benefits: document.getElementById("editBenefits").value?.trim() || null,
-        product_description: document.getElementById("editKeyFeatures").value?.trim() || null,
-        ingredients: document.getElementById("editIngredients").value?.trim() || null,
-        product_model_no: document.getElementById("editModelNo").value?.trim() || null,
-        base_price: parseFloat(document.getElementById("editBasePrice").value) || 0,
-        variants: JSON.stringify(variants)
-      };
+      // Send all product data + files in one multipart request.
+      formData.append("name", document.getElementById("editName").value?.trim() || "");
+      formData.append("description", document.getElementById("editDescription").value?.trim() || "");
+      formData.append("how_to_apply", document.getElementById("editHowToApply").value?.trim() || "");
+      formData.append("benefits", document.getElementById("editBenefits").value?.trim() || "");
+      formData.append("product_description", document.getElementById("editKeyFeatures").value?.trim() || "");
+      formData.append("ingredients", document.getElementById("editIngredients").value?.trim() || "");
+      formData.append("product_model_no", document.getElementById("editModelNo").value?.trim() || "");
+      formData.append("base_price", String(parseFloat(document.getElementById("editBasePrice").value) || 0));
 
-      // Handle category/subcategory
-      if (editSubcategoryId) {
-        editPayload.subcategory_id = parseInt(editSubcategoryId, 10);
-      }
-
-      if (deleteMediaIds.length > 0) {
-        editPayload.delete_media_ids = JSON.stringify(deleteMediaIds);
-      }
-      if (deleteVariantIds.length > 0) {
-        editPayload.delete_variant_ids = JSON.stringify(deleteVariantIds);
-      }
+      console.log("[EDIT PRODUCT] Sending multipart PUT with variants and files");
+      console.log("[EDIT PRODUCT] Variants payload:", variants);
 
       const token = localStorage.getItem("adminToken");
       const response = await fetch(
@@ -1643,132 +1633,19 @@ document.getElementById("editProductForm")
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
             "Authorization": `Bearer ${token}`
           },
-          body: JSON.stringify(editPayload)
+          body: formData
         }
       );
 
       const result = await response.json();
+      console.log("[EDIT PRODUCT] Response:", response.status, result);
 
       if (!response.ok) {
-        alert(result.message || "Error updating product");
+        alert(`${result.message || "Error updating product"}${result.details ? `\n\nDetails: ${result.details}` : ""}`);
         setButtonLoading(saveBtn, false);
         return;
-      }
-
-      // Step 2: Upload new gallery images
-      for (const imageItem of editSelectedImages) {
-        try {
-          const imgFormData = new FormData();
-          imgFormData.append("image", imageItem.file);
-
-          const token = localStorage.getItem("adminToken");
-          
-          const uploadResponse = await fetch(
-            `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${token}`
-              },
-              body: imgFormData
-            }
-          );
-
-          if (!uploadResponse.ok) {
-            const error = await uploadResponse.json();
-            console.error("Image upload failed:", error);
-          } else {
-            const uploadResult = await uploadResponse.json();
-            console.log("✅ Image uploaded:", uploadResult.image_url);
-          }
-        } catch (tmpError) {
-          console.error("Error uploading image:", tmpError);
-        }
-      }
-
-      // Step 3: Upload variant images
-      const editVariantElements = document.querySelectorAll("#editVariants .variant:not(.marked-for-deletion)");
-      for (const div of editVariantElements) {
-        const mainImageInput = div.querySelector(".main-image");
-        const secondaryImageInput = div.querySelector(".secondary-image");
-        const token = localStorage.getItem("adminToken");
-
-        // Upload main image
-        if (mainImageInput && mainImageInput.files[0]) {
-          try {
-            const variantImgFormData = new FormData();
-            variantImgFormData.append("image", mainImageInput.files[0]);
-
-            console.log(`  📤 Uploading variant ${i + 1} main image: ${mainImageInput.files[0].name}`);
-            console.log(`     File size: ${(mainImageInput.files[0].size / 1024).toFixed(2)}KB`);
-            console.log(`     Upload to: /api/v1/products/${editingProductId}/upload`);
-
-            const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                },
-                body: variantImgFormData
-              }
-            );
-
-            console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-            if (!uploadResponse.ok) {
-              const error = await uploadResponse.json();
-              console.error(`  ❌ Variant image upload failed [${uploadResponse.status}]:`, error);
-            } else {
-              const uploadResult = await uploadResponse.json();
-              console.log(`  ✅ Variant ${i + 1} main image uploaded:`, uploadResult);
-              console.log(`     - image_key: ${uploadResult.image_key}`);
-              console.log(`     - image_url: ${uploadResult.image_url}`);
-            }
-          } catch (tmpError) {
-            console.error(`  ❌ Error uploading variant ${i + 1} main image:`, tmpError);
-          }
-        }
-
-        // Upload secondary image
-        if (secondaryImageInput && secondaryImageInput.files[0]) {
-          try {
-            const variantImgFormData = new FormData();
-            variantImgFormData.append("image", secondaryImageInput.files[0]);
-
-            console.log(`  📤 Uploading variant ${i + 1} secondary image: ${secondaryImageInput.files[0].name}`);
-            console.log(`     File size: ${(secondaryImageInput.files[0].size / 1024).toFixed(2)}KB`);
-            console.log(`     Upload to: /api/v1/products/${editingProductId}/upload`);
-
-            const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${editingProductId}/upload?mediaProvider=${currentMediaProvider}`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                },
-                body: variantImgFormData
-              }
-            );
-
-            console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-            if (!uploadResponse.ok) {
-              const error = await uploadResponse.json();
-              console.error(`  ❌ Secondary image upload failed [${uploadResponse.status}]:`, error);
-            } else {
-              const uploadResult = await uploadResponse.json();
-              console.log(`  ✅ Variant ${i + 1} secondary image uploaded:`, uploadResult);
-              console.log(`     - image_key: ${uploadResult.image_key}`);
-              console.log(`     - image_url: ${uploadResult.image_url}`);
-            }
-          } catch (tmpError) {
-            console.error(`  ❌ Error uploading variant ${i + 1} secondary image:`, tmpError);
-          }
-        }
       }
 
       alert("Product Updated Successfully");
