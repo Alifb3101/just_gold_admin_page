@@ -1805,6 +1805,8 @@ if (quickVariantForm) {
       return;
     }
 
+    console.log("[QUICK VARIANT] === FORM SUBMISSION START ===");
+
     const formData = new FormData();
     const blocks = quickVariantForm.querySelectorAll("#quickVariantsList .quick-variant");
     if (!blocks.length) {
@@ -1815,6 +1817,8 @@ if (quickVariantForm) {
     const variantsPayload = [];
     let variantIndex = 0;
 
+    console.log(`[QUICK VARIANT] Processing ${blocks.length} variant block(s)`);
+
     for (const block of blocks) {
       const color = block.querySelector(".color")?.value.trim();
       const variantType = block.querySelector(".variant-type")?.value.trim();
@@ -1824,6 +1828,8 @@ if (quickVariantForm) {
       const discount = block.querySelector(".discount")?.value;
       const mainImageInput = block.querySelector(".main-image");
       const secondaryImageInput = block.querySelector(".secondary-image");
+
+      console.log(`[QUICK VARIANT] Variant ${variantIndex}: ${color} (${variantModelNo})`);
 
       if (!color || !variantModelNo || !stock) {
         alert("Color name, model no, and stock are required for each variant");
@@ -1843,166 +1849,75 @@ if (quickVariantForm) {
       variantData.color_panel_type = panelData.color_panel_type;
       variantData.color_panel_value = panelData.color_panel_value;
 
+      console.log(`[QUICK VARIANT]   Panel - Type: ${panelData.color_panel_type}, Value: ${panelData.color_panel_value}`);
+
       if (mainImageInput && mainImageInput.files[0]) {
+        console.log(`[QUICK VARIANT]   Main image: ${mainImageInput.files[0].name} (${(mainImageInput.files[0].size / 1024).toFixed(2)}KB)`);
         formData.append(`color_${variantIndex}`, mainImageInput.files[0]);
+      } else {
+        console.log(`[QUICK VARIANT]   Main image: NONE`);
       }
+
       if (secondaryImageInput && secondaryImageInput.files[0]) {
+        console.log(`[QUICK VARIANT]   Secondary image: ${secondaryImageInput.files[0].name} (${(secondaryImageInput.files[0].size / 1024).toFixed(2)}KB)`);
         formData.append(`color_secondary_${variantIndex}`, secondaryImageInput.files[0]);
+      } else {
+        console.log(`[QUICK VARIANT]   Secondary image: NONE`);
       }
 
       variantsPayload.push(variantData);
       variantIndex += 1;
     }
 
+    console.log(`[QUICK VARIANT] Variants payload:`, JSON.stringify(variantsPayload, null, 2));
+    
+    // IMPORTANT: Use FormData for the entire request so files are included
     formData.append("variants", JSON.stringify(variantsPayload));
+    
+    console.log("[QUICK VARIANT] FormData contents:");
+    for (let [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  - ${key}: File(${value.name}, ${(value.size / 1024).toFixed(2)}KB)`);
+      } else {
+        console.log(`  - ${key}: ${typeof value === 'string' ? value.substring(0, 100) : value}`);
+      }
+    }
 
     const submitBtn = quickVariantForm.querySelector(".btn-primary");
     setButtonLoading(submitBtn, true, "Adding…");
 
     try {
-      // Step 1: Update product with variants (JSON only, no files)
-      const quickPayload = {
-        variants: JSON.stringify(variantsPayload)
-      };
-
+      // Step 1: Submit all data including variant images and color panel images as FormData
       const token = localStorage.getItem("adminToken");
+      
+      console.log(`[QUICK VARIANT] Sending PUT /products/${quickVariantProductId}`);
+      console.log(`[QUICK VARIANT] Method: PUT, Content-Type: FormData`);
+
       const response = await fetch(
         `http://localhost:5000/api/v1/products/${quickVariantProductId}`,
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
+            // DO NOT set Content-Type - let browser set it with boundary for FormData
             "Authorization": `Bearer ${token}`
           },
-          body: JSON.stringify(quickPayload)
+          body: formData
         }
       );
 
+      console.log(`[QUICK VARIANT] Response Status: ${response.status}`);
+
       const result = await response.json();
+      console.log(`[QUICK VARIANT] Response Body:`, result);
 
       if (!response.ok) {
-        alert(result.message || "Error adding color variant");
+        console.error(`[QUICK VARIANT] ❌ Server Error:`, result.message);
+        alert(`Error: ${result.message || "Error adding color variant"}`);
         setButtonLoading(submitBtn, false);
         return;
       }
 
-      // Step 2: Upload variant images
-      const blocks = quickVariantForm.querySelectorAll("#quickVariantsList .quick-variant");
-      let variantIndex = 0;
-
-      for (const block of blocks) {
-        const mainImageInput = block.querySelector(".main-image");
-        const secondaryImageInput = block.querySelector(".secondary-image");
-        const colorPanelImageInput = block.querySelector(".color-panel-image-file");
-
-        // Upload main image
-        if (mainImageInput && mainImageInput.files[0]) {
-          try {
-            const variantImgFormData = new FormData();
-            variantImgFormData.append("image", mainImageInput.files[0]);
-
-            console.log(`  📤 Quick variant: Uploading main image: ${mainImageInput.files[0].name}`);
-            console.log(`     File size: ${(mainImageInput.files[0].size / 1024).toFixed(2)}KB`);
-            console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
-
-            const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                },
-                body: variantImgFormData
-              }
-            );
-
-            console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-            if (!uploadResponse.ok) {
-              const error = await uploadResponse.json();
-              console.error(`  ❌ Variant main image upload failed [${uploadResponse.status}]:`, error);
-            } else {
-              const uploadResult = await uploadResponse.json();
-              console.log(`  ✅ Quick variant main image uploaded:`, uploadResult);
-            }
-          } catch (tmpError) {
-            console.error(`  ❌ Error uploading quick variant main image:`, tmpError);
-          }
-        }
-
-        // Upload secondary image
-        if (secondaryImageInput && secondaryImageInput.files[0]) {
-          try {
-            const variantImgFormData = new FormData();
-            variantImgFormData.append("image", secondaryImageInput.files[0]);
-
-            console.log(`  📤 Quick variant: Uploading secondary image: ${secondaryImageInput.files[0].name}`);
-            console.log(`     File size: ${(secondaryImageInput.files[0].size / 1024).toFixed(2)}KB`);
-            console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
-
-            const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                },
-                body: variantImgFormData
-              }
-            );
-
-            console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-            if (!uploadResponse.ok) {
-              const error = await uploadResponse.json();
-              console.error(`  ❌ Variant secondary image upload failed [${uploadResponse.status}]:`, error);
-            } else {
-              const uploadResult = await uploadResponse.json();
-              console.log(`  ✅ Quick variant secondary image uploaded:`, uploadResult);
-            }
-          } catch (tmpError) {
-            console.error(`  ❌ Error uploading quick variant secondary image:`, tmpError);
-          }
-        }
-
-        // Upload color panel image if present
-        if (colorPanelImageInput && colorPanelImageInput.files[0]) {
-          try {
-            const colorPanelFormData = new FormData();
-            colorPanelFormData.append("image", colorPanelImageInput.files[0]);
-
-            console.log(`  📤 Quick variant: Uploading color panel image: ${colorPanelImageInput.files[0].name}`);
-            console.log(`     File size: ${(colorPanelImageInput.files[0].size / 1024).toFixed(2)}KB`);
-            console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
-
-            const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
-              {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${token}`
-                },
-                body: colorPanelFormData
-              }
-            );
-
-            console.log(`  📥 Response Status: ${uploadResponse.status}`);
-
-            if (!uploadResponse.ok) {
-              const error = await uploadResponse.json();
-              console.error(`  ❌ Color panel image upload failed [${uploadResponse.status}]:`, error);
-            } else {
-              const uploadResult = await uploadResponse.json();
-              console.log(`  ✅ Quick variant color panel image uploaded:`, uploadResult);
-            }
-          } catch (tmpError) {
-            console.error(`  ❌ Error uploading quick variant color panel image:`, tmpError);
-          }
-        }
-
-        variantIndex += 1;
-      }
-
+      console.log(`[QUICK VARIANT] ✅ Variants added successfully`);
       alert("Color variant added");
       closeQuickVariantModal();
       loadProducts(currentPage);
