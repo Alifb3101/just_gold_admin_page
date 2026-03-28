@@ -1615,15 +1615,6 @@ document.getElementById("editProductForm")
 
     try {
       // Send all product data + files in one multipart request.
-      formData.append("name", document.getElementById("editName").value?.trim() || "");
-      formData.append("description", document.getElementById("editDescription").value?.trim() || "");
-      formData.append("how_to_apply", document.getElementById("editHowToApply").value?.trim() || "");
-      formData.append("benefits", document.getElementById("editBenefits").value?.trim() || "");
-      formData.append("product_description", document.getElementById("editKeyFeatures").value?.trim() || "");
-      formData.append("ingredients", document.getElementById("editIngredients").value?.trim() || "");
-      formData.append("product_model_no", document.getElementById("editModelNo").value?.trim() || "");
-      formData.append("base_price", String(parseFloat(document.getElementById("editBasePrice").value) || 0));
-
       console.log("[EDIT PRODUCT] Sending multipart PUT with variants and files");
       console.log("[EDIT PRODUCT] Variants payload:", variants);
 
