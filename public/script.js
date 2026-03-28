@@ -1888,10 +1888,12 @@ if (quickVariantForm) {
 
       // Step 2: Upload variant images
       const blocks = quickVariantForm.querySelectorAll("#quickVariantsList .quick-variant");
+      let variantIndex = 0;
+
       for (const block of blocks) {
         const mainImageInput = block.querySelector(".main-image");
         const secondaryImageInput = block.querySelector(".secondary-image");
-        const token = localStorage.getItem("adminToken");
+        const colorPanelImageInput = block.querySelector(".color-panel-image-file");
 
         // Upload main image
         if (mainImageInput && mainImageInput.files[0]) {
@@ -1904,7 +1906,7 @@ if (quickVariantForm) {
             console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
+              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1939,7 +1941,7 @@ if (quickVariantForm) {
             console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
 
             const uploadResponse = await fetch(
-              `http://localhost:5000/api/v1/products${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
+              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
               {
                 method: "POST",
                 headers: {
@@ -1962,6 +1964,43 @@ if (quickVariantForm) {
             console.error(`  ❌ Error uploading quick variant secondary image:`, tmpError);
           }
         }
+
+        // Upload color panel image if present
+        if (colorPanelImageInput && colorPanelImageInput.files[0]) {
+          try {
+            const colorPanelFormData = new FormData();
+            colorPanelFormData.append("image", colorPanelImageInput.files[0]);
+
+            console.log(`  📤 Quick variant: Uploading color panel image: ${colorPanelImageInput.files[0].name}`);
+            console.log(`     File size: ${(colorPanelImageInput.files[0].size / 1024).toFixed(2)}KB`);
+            console.log(`     Upload to: /api/v1/products/${quickVariantProductId}/upload`);
+
+            const uploadResponse = await fetch(
+              `http://localhost:5000/api/v1/products/${quickVariantProductId}/upload?mediaProvider=${currentMediaProvider}`,
+              {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`
+                },
+                body: colorPanelFormData
+              }
+            );
+
+            console.log(`  📥 Response Status: ${uploadResponse.status}`);
+
+            if (!uploadResponse.ok) {
+              const error = await uploadResponse.json();
+              console.error(`  ❌ Color panel image upload failed [${uploadResponse.status}]:`, error);
+            } else {
+              const uploadResult = await uploadResponse.json();
+              console.log(`  ✅ Quick variant color panel image uploaded:`, uploadResult);
+            }
+          } catch (tmpError) {
+            console.error(`  ❌ Error uploading quick variant color panel image:`, tmpError);
+          }
+        }
+
+        variantIndex += 1;
       }
 
       alert("Color variant added");
