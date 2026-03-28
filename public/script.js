@@ -627,7 +627,7 @@ function collectColorPanelData(variantEl, formData, variantIndex) {
   const gradientInput = variantEl.querySelector(".color-panel-value-gradient");
   const imageFileInput = variantEl.querySelector(".color-panel-image-file");
 
-  const type = typeSelect ? (typeSelect.value || "hex") : "hex";
+  let type = typeSelect ? (typeSelect.value || "hex") : "hex";
   let value = null;
 
   if (type === "hex" && hexInput) {
@@ -643,6 +643,12 @@ function collectColorPanelData(variantEl, formData, variantIndex) {
     }
     if ((!value || value === "") && variantEl.dataset.initialPanelValue) {
       value = variantEl.dataset.initialPanelValue;
+    }
+
+    // Do not send an invalid image panel config without either upload or existing value.
+    if (!value) {
+      console.warn(`[COLOR PANEL] Variant ${variantIndex}: image selected without upload/value; sending null panel config`);
+      type = null;
     }
   }
 
@@ -1593,6 +1599,12 @@ document.getElementById("editProductForm")
       variantData.color_panel_type = panelData.color_panel_type;
       variantData.color_panel_value = panelData.color_panel_value;
 
+      console.log(`[EDIT PRODUCT] Variant ${variantIndex} panel:`, {
+        type: variantData.color_panel_type,
+        value: variantData.color_panel_value,
+        hasNewPanelUpload: !!(div.querySelector(".color-panel-image-file")?.files?.[0])
+      });
+
       // Include ID for existing variants
       if (dbId) {
         variantData.id = Number(dbId.value);
@@ -1612,6 +1624,13 @@ document.getElementById("editProductForm")
     });
 
     formData.append("variants", JSON.stringify(variants));
+
+    console.log("[EDIT PRODUCT] FormData file keys:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  - ${key}: ${value.name}`);
+      }
+    }
 
     try {
       // Send all product data + files in one multipart request.
