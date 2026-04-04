@@ -156,7 +156,8 @@ async function viewOrder(orderId) {
 
     if (!response) return; // fetchWithAuth handles 401 and redirects
 
-    const order = await response.json();
+    const payload = await response.json();
+    const order = payload && payload.data ? payload.data : payload;
     renderOrderDetail(order);
 
   } catch (error) {
@@ -219,6 +220,17 @@ function renderOrderDetail(order) {
         </select>
         <button class="btn btn-primary" onclick="updateOrderStatus('${order.id}')">Update</button>
       </div>
+
+      <div class="status-update">
+        <select id="newPaymentStatus">
+          <option value="">Update Payment Status...</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="failed">Failed</option>
+          <option value="refunded">Refunded</option>
+        </select>
+        <button class="btn btn-primary" onclick="updatePaymentStatus('${order.id}')">Update Payment</button>
+      </div>
     </div>
 
     <div class="detail-section">
@@ -268,18 +280,24 @@ function renderOrderDetail(order) {
     <div class="detail-section">
       <h3>Items (${(order.items || []).length})</h3>
       <div class="order-items-list">
-        ${(order.items || []).map(item => `
+        ${(order.items || []).map(item => {
+          const itemImage = item.thumbnail || item.variant_image || '/placeholder.jpg';
+          const itemName = item.name || item.product_name_snapshot || 'N/A';
+          const itemShade = item.variant?.shade || item.shade || '';
+          const itemQuantity = item.quantity || 1;
+          return `
           <div class="order-item">
-            <img class="order-item-image" src="${item.variant_image || '/placeholder.jpg'}" alt="${item.product_name_snapshot || 'Product'}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3ede1%22 width=%22100%22 height=%22100%22/></svg>'">
+            <img class="order-item-image" src="${itemImage}" alt="${itemName}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f3ede1%22 width=%22100%22 height=%22100%22/></svg>'">
             <div class="order-item-details">
-              <span class="order-item-name">${item.product_name_snapshot || 'N/A'}</span>
-              <span class="order-item-variant">${item.shade ? `Shade: ${item.shade}` : ''} × ${item.quantity || 1}</span>
+              <span class="order-item-name">${itemName}</span>
+              <span class="order-item-variant">${itemShade ? `Shade: ${itemShade}` : ''} × ${itemQuantity}</span>
             </div>
             <div class="order-item-price">
               ${pricing.currency} ${parseFloat(item.total_price || 0).toFixed(2)}
             </div>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     </div>
 
@@ -338,6 +356,36 @@ async function updateOrderStatus(orderId) {
   } catch (error) {
     console.error('Error updating status:', error);
     alert('Error updating order status');
+  }
+}
+
+async function updatePaymentStatus(orderId) {
+  const newPaymentStatus = document.getElementById('newPaymentStatus').value;
+  if (!newPaymentStatus) {
+    alert('Please select a payment status');
+    return;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/orders/admin/${orderId}/payment-status?_test_admin_id=1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ payment_status: newPaymentStatus })
+    });
+
+    if (!response) return;
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.message || 'Failed to update payment status');
+      return;
+    }
+
+    alert('Payment status updated successfully!');
+    closeModal();
+    loadOrders();
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    alert('Error updating payment status');
   }
 }
 

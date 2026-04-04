@@ -8,9 +8,8 @@ let categories = [];
 const BEST_SELLER_SUBCATEGORY_ID = "3";
 const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
 
-// Media Provider Settings - MUST be initialized with default
-let currentMediaProvider = 'imagekit';  // Default provider (AWS/ImageKit)
-let availableProviders = ['cloudinary', 'imagekit'];
+// Media provider options are fetched from backend settings when available.
+let availableProviders = ['cloudinary', 'aws_s3'];
 
 const categorySelectEl = document.getElementById("categorySelect");
 const subcategorySelectEl = document.getElementById("subcategorySelect");
@@ -26,6 +25,380 @@ const tagsInputEl = document.getElementById("tagsInput");
 const bestSellerToggleEl = document.getElementById("bestSellerToggle");
 const editTagsInputEl = document.getElementById("editTagsInput");
 const editBestSellerToggleEl = document.getElementById("editBestSellerToggle");
+const mediaProviderEl = document.getElementById("mediaProvider");
+const editMediaProviderEl = document.getElementById("editMediaProvider");
+const quickMediaProviderEl = document.getElementById("quickMediaProvider");
+const editThumbnailUrlSelectEl = document.getElementById("editThumbnailUrlSelect");
+const editAfterimageUrlSelectEl = document.getElementById("editAfterimageUrlSelect");
+const thumbnailAfterimageStatusEl = document.getElementById("thumbnailAfterimageStatus");
+const refreshImageUrlsBtnEl = document.getElementById("refreshImageUrlsBtn");
+const saveThumbnailAfterimageBtnEl = document.getElementById("saveThumbnailAfterimageBtn");
+const thumbnailPreviewBoxEl = document.getElementById("thumbnailPreviewBox");
+const afterimagePreviewBoxEl = document.getElementById("afterimagePreviewBox");
+const imageUrlPickerGridEl = document.getElementById("imageUrlPickerGrid");
+const customThumbnailUrlInputEl = document.getElementById("customThumbnailUrlInput");
+const customAfterimageUrlInputEl = document.getElementById("customAfterimageUrlInput");
+const applyBulkCreateVariantsBtnEl = document.getElementById("applyBulkCreateVariants");
+const applyBulkEditVariantsBtnEl = document.getElementById("applyBulkEditVariants");
+
+function getMediaProviderLabel(provider) {
+  const labels = {
+    cloudinary: "Cloudinary",
+    aws_s3: "AWS S3",
+    imagekit: "ImageKit"
+  };
+  return labels[provider] || provider;
+}
+
+function renderMediaProviderOptions(providers) {
+  const normalizedProviders = Array.from(new Set((providers || [])
+    .filter(Boolean)
+    .map(value => String(value).trim())
+    .filter(value => value && value !== "local")));
+
+  if (!normalizedProviders.length) {
+    return;
+  }
+
+  const optionsHtml = [
+    '<option value="" selected disabled>Select media provider</option>',
+    ...normalizedProviders.map(provider => `<option value="${provider}">${getMediaProviderLabel(provider)}</option>`)
+  ].join("");
+
+  if (mediaProviderEl) {
+    mediaProviderEl.innerHTML = optionsHtml;
+  }
+
+  if (editMediaProviderEl) {
+    editMediaProviderEl.innerHTML = optionsHtml;
+  }
+
+  if (quickMediaProviderEl) {
+    quickMediaProviderEl.innerHTML = optionsHtml;
+  }
+}
+
+function getSelectedMediaProvider(selectElement, context) {
+  const selectedProvider = selectElement?.value?.trim();
+  if (!selectedProvider) {
+    alert(`Please select a media provider before ${context}.`);
+    return null;
+  }
+  return selectedProvider;
+}
+
+function applyBulkValuesToVariants(containerSelector, values, onlyEmpty = false) {
+  const variants = Array.from(document.querySelectorAll(`${containerSelector} .variant`))
+    .filter(variant => !variant.classList.contains("marked-for-deletion"));
+
+  if (!variants.length) {
+    alert("No variants found to update.");
+    return;
+  }
+
+  const hasValue = values.stock !== "" || values.price !== "" || values.discount !== "";
+  if (!hasValue) {
+    alert("Enter at least one value (stock, price, or discount) to apply.");
+    return;
+  }
+
+  let updatedFields = 0;
+
+  variants.forEach((variant) => {
+    const stockInput = variant.querySelector(".stock");
+    const priceInput = variant.querySelector(".price");
+    const discountInput = variant.querySelector(".discount");
+
+    if (stockInput && values.stock !== "" && (!onlyEmpty || !String(stockInput.value || "").trim())) {
+      stockInput.value = values.stock;
+      updatedFields += 1;
+    }
+    if (priceInput && values.price !== "" && (!onlyEmpty || !String(priceInput.value || "").trim())) {
+      priceInput.value = values.price;
+      updatedFields += 1;
+    }
+    if (discountInput && values.discount !== "" && (!onlyEmpty || !String(discountInput.value || "").trim())) {
+      discountInput.value = values.discount;
+      updatedFields += 1;
+    }
+  });
+
+  alert(`Bulk update complete. Updated ${updatedFields} field(s) across ${variants.length} variant(s).`);
+}
+
+function applyCreateBulkVariantValues() {
+  applyBulkValuesToVariants("#variants", {
+    stock: (document.getElementById("bulkStock")?.value || "").trim(),
+    price: (document.getElementById("bulkPrice")?.value || "").trim(),
+    discount: (document.getElementById("bulkDiscount")?.value || "").trim()
+  }, document.getElementById("bulkOnlyEmpty")?.checked === true);
+}
+
+function applyEditBulkVariantValues() {
+  applyBulkValuesToVariants("#editVariants", {
+    stock: (document.getElementById("editBulkStock")?.value || "").trim(),
+    price: (document.getElementById("editBulkPrice")?.value || "").trim(),
+    discount: (document.getElementById("editBulkDiscount")?.value || "").trim()
+  }, document.getElementById("editBulkOnlyEmpty")?.checked === true);
+}
+
+function setThumbnailAfterimageStatus(message) {
+  if (thumbnailAfterimageStatusEl) {
+    thumbnailAfterimageStatusEl.textContent = message;
+  }
+}
+
+function getImageUrlLabel(item) {
+  const source = item?.source ? String(item.source) : (item?.type ? String(item.type).replace(/_/g, " ") : "image");
+  const shade = item?.shade ? ` (shade ${item.shade})` : "";
+  return `${source}${shade} - ${item?.url || ""}`;
+}
+
+function renderImagePreview(targetEl, url, emptyText) {
+  if (!targetEl) {
+    return;
+  }
+
+  const safeUrl = typeof url === "string" ? url.trim() : "";
+  if (!safeUrl) {
+    targetEl.textContent = emptyText;
+    return;
+  }
+
+  targetEl.innerHTML = `<img src="${safeUrl}" alt="Selected image preview" loading="lazy">`;
+}
+
+function getPreferredThumbnailUrl() {
+  const custom = customThumbnailUrlInputEl?.value?.trim() || "";
+  if (custom) {
+    return custom;
+  }
+  return editThumbnailUrlSelectEl?.value?.trim() || "";
+}
+
+function getPreferredAfterimageUrl() {
+  const custom = customAfterimageUrlInputEl?.value?.trim() || "";
+  if (custom) {
+    return custom;
+  }
+  return editAfterimageUrlSelectEl?.value?.trim() || "";
+}
+
+function updateThumbnailAfterimagePreviews() {
+  renderImagePreview(
+    thumbnailPreviewBoxEl,
+    getPreferredThumbnailUrl(),
+    "No thumbnail selected"
+  );
+
+  renderImagePreview(
+    afterimagePreviewBoxEl,
+    getPreferredAfterimageUrl(),
+    "No afterimage selected"
+  );
+}
+
+function renderImagePickerGrid(imageUrls = []) {
+  if (!imageUrlPickerGridEl) {
+    return;
+  }
+
+  imageUrlPickerGridEl.innerHTML = "";
+
+  if (!imageUrls.length) {
+    imageUrlPickerGridEl.innerHTML = '<p class="meta">No images returned by API.</p>';
+    return;
+  }
+
+  imageUrls.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "ta-image-card";
+
+    const img = document.createElement("img");
+    img.src = item.url;
+    img.alt = "Available product image";
+    img.loading = "lazy";
+
+    const meta = document.createElement("p");
+    meta.className = "meta";
+    meta.textContent = item.source || "image";
+
+    const actions = document.createElement("div");
+    actions.className = "ta-image-actions";
+
+    const thumbBtn = document.createElement("button");
+    thumbBtn.type = "button";
+    thumbBtn.className = "btn-secondary";
+    thumbBtn.textContent = "Use as Thumbnail";
+    thumbBtn.addEventListener("click", () => {
+      if (editThumbnailUrlSelectEl) {
+        editThumbnailUrlSelectEl.value = item.url;
+        if (customThumbnailUrlInputEl) {
+          customThumbnailUrlInputEl.value = "";
+        }
+        updateThumbnailAfterimagePreviews();
+      }
+    });
+
+    const afterBtn = document.createElement("button");
+    afterBtn.type = "button";
+    afterBtn.className = "btn-secondary";
+    afterBtn.textContent = "Use as Afterimage";
+    afterBtn.addEventListener("click", () => {
+      if (editAfterimageUrlSelectEl) {
+        editAfterimageUrlSelectEl.value = item.url;
+        if (customAfterimageUrlInputEl) {
+          customAfterimageUrlInputEl.value = "";
+        }
+        updateThumbnailAfterimagePreviews();
+      }
+    });
+
+    actions.appendChild(thumbBtn);
+    actions.appendChild(afterBtn);
+    card.appendChild(img);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    imageUrlPickerGridEl.appendChild(card);
+  });
+}
+
+function normalizeImageUrlPayload(data) {
+  const list = Array.isArray(data?.urls)
+    ? data.urls
+    : (Array.isArray(data?.image_urls) ? data.image_urls : []);
+
+  const normalizedUrls = list
+    .filter(item => item && typeof item.url === "string" && item.url.trim())
+    .map(item => ({
+      url: item.url.trim(),
+      source: item.source || item.type || "image",
+      variant_id: item.variant_id || item.reference_id || null,
+      shade: item.shade || null
+    }));
+
+  const current = {
+    thumbnail: typeof data?.current?.thumbnail === "string" ? data.current.thumbnail.trim() : "",
+    afterimage: typeof data?.current?.afterimage === "string" ? data.current.afterimage.trim() : ""
+  };
+
+  return { normalizedUrls, current };
+}
+
+function renderThumbnailAfterimageOptions(imageUrls = [], current = {}) {
+  if (!editThumbnailUrlSelectEl || !editAfterimageUrlSelectEl) {
+    return;
+  }
+
+  const uniqueUrls = Array.from(new Set((imageUrls || [])
+    .map(item => (typeof item?.url === "string" ? item.url.trim() : ""))
+    .filter(Boolean)));
+
+  const defaultThumb = typeof current.thumbnail === "string" ? current.thumbnail.trim() : "";
+  const defaultAfter = typeof current.afterimage === "string" ? current.afterimage.trim() : "";
+
+  const options = ['<option value="">Do not change</option>'];
+  uniqueUrls.forEach((url) => {
+    const item = (imageUrls || []).find(entry => entry.url === url) || { url, type: "image" };
+    options.push(`<option value="${url}">${getImageUrlLabel(item)}</option>`);
+  });
+
+  editThumbnailUrlSelectEl.innerHTML = options.join("");
+  editAfterimageUrlSelectEl.innerHTML = options.join("");
+
+  if (defaultThumb && uniqueUrls.includes(defaultThumb)) {
+    editThumbnailUrlSelectEl.value = defaultThumb;
+  } else {
+    editThumbnailUrlSelectEl.value = "";
+  }
+
+  if (defaultAfter && uniqueUrls.includes(defaultAfter)) {
+    editAfterimageUrlSelectEl.value = defaultAfter;
+  } else {
+    editAfterimageUrlSelectEl.value = "";
+  }
+
+  updateThumbnailAfterimagePreviews();
+  renderImagePickerGrid(imageUrls);
+}
+
+async function loadEditImageUrls(productId) {
+  if (!productId) {
+    return;
+  }
+
+  setThumbnailAfterimageStatus("Loading image URLs...");
+  if (refreshImageUrlsBtnEl) {
+    refreshImageUrlsBtnEl.disabled = true;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/products/${productId}/image-urls`);
+    if (!response) {
+      return;
+    }
+
+    const data = await response.json();
+    const { normalizedUrls, current } = normalizeImageUrlPayload(data);
+    renderThumbnailAfterimageOptions(normalizedUrls, current);
+    setThumbnailAfterimageStatus(`${normalizedUrls.length} image URL(s) loaded. Select thumbnail and/or afterimage.`);
+  } catch (error) {
+    console.error("[THUMBNAIL AFTERIMAGE] Failed to load image URLs:", error);
+    setThumbnailAfterimageStatus("Failed to load image URLs.");
+  } finally {
+    if (refreshImageUrlsBtnEl) {
+      refreshImageUrlsBtnEl.disabled = false;
+    }
+  }
+}
+
+async function saveThumbnailAfterimage() {
+  if (!editingProductId) {
+    alert("Open an existing product first.");
+    return;
+  }
+
+  const thumbnail = getPreferredThumbnailUrl();
+  const afterimage = getPreferredAfterimageUrl();
+  const payload = {};
+
+  if (thumbnail) {
+    payload.thumbnail = thumbnail;
+  }
+  if (afterimage) {
+    payload.afterimage = afterimage;
+  }
+
+  if (!payload.thumbnail && !payload.afterimage) {
+    alert("Select thumbnail or afterimage before saving.");
+    return;
+  }
+
+  setButtonLoading(saveThumbnailAfterimageBtnEl, true, "Saving...");
+  setThumbnailAfterimageStatus("Saving thumbnail/afterimage...");
+
+  try {
+    const response = await fetchWithAuth(`/admin/products/${editingProductId}/thumbnail-afterimage`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    if (!response) {
+      return;
+    }
+
+    const result = await response.json();
+    setThumbnailAfterimageStatus("Thumbnail/afterimage updated successfully.");
+    alert(result.message || "Thumbnail/afterimage updated successfully.");
+    await loadEditImageUrls(editingProductId);
+  } catch (error) {
+    console.error("[THUMBNAIL AFTERIMAGE] Save failed:", error);
+    setThumbnailAfterimageStatus("Failed to update thumbnail/afterimage.");
+    alert(error.message || "Failed to update thumbnail/afterimage.");
+  } finally {
+    setButtonLoading(saveThumbnailAfterimageBtnEl, false);
+  }
+}
 
 function updateProductPagination(totalCount = 0) {
   currentPage = 1;
@@ -871,6 +1244,7 @@ document.getElementById("productForm")
 
   const productName = formData.get("name")?.trim();
   const basePrice = formData.get("base_price")?.trim();
+  const baseStock = formData.get("base_stock")?.trim();
   const categoryId = formData.get("category_id")?.trim();
   const subcategoryId = formData.get("subcategory_id")?.trim();
 
@@ -895,6 +1269,13 @@ document.getElementById("productForm")
     return;
   }
 
+  if (baseStock && (isNaN(baseStock) || parseInt(baseStock, 10) < 0)) {
+    console.error("❌ VALIDATION FAILED: Base stock invalid. Value:", baseStock);
+    alert("Base stock must be 0 or greater");
+    setButtonLoading(submitBtn, false);
+    return;
+  }
+
   if (!categoryId && !subcategoryId) {
     console.error("❌ VALIDATION FAILED: No category or subcategory selected");
     console.log("  categorySelect element value:", document.getElementById("categorySelect")?.value);
@@ -909,9 +1290,20 @@ document.getElementById("productForm")
   /* ---- Create Product (multipart with files + variants) ---- */
 
   try {
+    const selectedProvider = getSelectedMediaProvider(mediaProviderEl, "creating the product");
+    if (!selectedProvider) {
+      setButtonLoading(submitBtn, false);
+      return;
+    }
+
     // Keep provider explicit and send all selected gallery files in the same create request.
-    formData.set("media_provider", currentMediaProvider);
+    formData.set("media_provider", selectedProvider);
     formData.set("base_price", String(parseFloat(basePrice)));
+    if (baseStock) {
+      formData.set("base_stock", String(parseInt(baseStock, 10)));
+    } else {
+      formData.delete("base_stock");
+    }
     formData.set("variants", JSON.stringify(variants));
 
     selectedImages.forEach((imageItem) => {
@@ -919,7 +1311,7 @@ document.getElementById("productForm")
     });
 
     console.log("📤 Sending multipart create request with variant file keys");
-    console.log("  Provider:", currentMediaProvider);
+    console.log("  Provider:", selectedProvider);
     console.log("  Variants:", variants.length);
     console.log("  Gallery files:", selectedImages.length);
     console.log("  File keys:");
@@ -1018,6 +1410,15 @@ function resetEditForm() {
   document.getElementById("editVariants").innerHTML = "";
   document.getElementById("editCurrentMedia").innerHTML = "";
   document.getElementById("editGalleryPreview").innerHTML = "";
+  if (customThumbnailUrlInputEl) {
+    customThumbnailUrlInputEl.value = "";
+  }
+  if (customAfterimageUrlInputEl) {
+    customAfterimageUrlInputEl.value = "";
+  }
+  renderThumbnailAfterimageOptions([]);
+  updateThumbnailAfterimagePreviews();
+  setThumbnailAfterimageStatus("Load an existing product to fetch image URLs.");
   editingProductId = null;
   editSelectedImages = [];
   deleteMediaIds = [];
@@ -1067,6 +1468,7 @@ async function editProduct(slug, productId) {
     document.getElementById("editIngredients").value = product.ingredients || "";
     document.getElementById("editModelNo").value = product.product_model_no || "";
     document.getElementById("editBasePrice").value = product.base_price || "";
+    document.getElementById("editBaseStock").value = product.base_stock || "";
 
     const rawTags = product.tags || responsePayload.tags;
     let normalizedTags = "";
@@ -1113,6 +1515,7 @@ async function editProduct(slug, productId) {
     // Render existing media & variants
     renderEditCurrentMedia(mediaItems);
     renderEditExistingVariants(existingVariants);
+    await loadEditImageUrls(editingProductId);
 
     if (editBtn) {
       editBtn.textContent = originalText;
@@ -1381,7 +1784,14 @@ document.getElementById("editProductForm")
     formData.append("ingredients", document.getElementById("editIngredients").value);
     formData.append("product_model_no", document.getElementById("editModelNo").value);
     formData.append("base_price", document.getElementById("editBasePrice").value);
-    formData.append("media_provider", document.getElementById("editMediaProvider").value);
+    formData.append("base_stock", document.getElementById("editBaseStock").value);
+    const selectedEditProvider = getSelectedMediaProvider(editMediaProviderEl, "saving product updates");
+    if (!selectedEditProvider) {
+      setButtonLoading(saveBtn, false);
+      return;
+    }
+
+    formData.append("media_provider", selectedEditProvider);
 
     const wantsBestSellerEdit = editBestSellerToggleEl?.checked === true;
     const editTagsRaw = editTagsInputEl ? editTagsInputEl.value : "";
@@ -1611,6 +2021,12 @@ if (quickVariantForm) {
     console.log(`[QUICK VARIANT] Variants payload:`, JSON.stringify(variantsPayload, null, 2));
     
     // IMPORTANT: Use FormData for the entire request so files are included
+    const selectedQuickProvider = getSelectedMediaProvider(quickMediaProviderEl, "adding color variants");
+    if (!selectedQuickProvider) {
+      return;
+    }
+
+    formData.append("media_provider", selectedQuickProvider);
     formData.append("variants", JSON.stringify(variantsPayload));
     
     console.log("[QUICK VARIANT] FormData contents:");
@@ -1693,10 +2109,11 @@ async function fetchMediaProviderSettings() {
 
     if (response && response.ok) {
       const data = await response.json();
-      currentMediaProvider = data.provider || 'imagekit';
-      availableProviders = data.availableProviders || ['cloudinary', 'imagekit'];
+      availableProviders = Array.isArray(data.availableProviders)
+        ? data.availableProviders
+        : ['cloudinary', 'aws_s3'];
+      renderMediaProviderOptions(availableProviders);
       console.log('📡 Media Provider Settings loaded:', {
-        current: currentMediaProvider,
         available: availableProviders
       });
     }
@@ -1723,6 +2140,44 @@ window.openQuickVariant = openQuickVariant;
 window.closeQuickVariantModal = closeQuickVariantModal;
 window.addQuickVariantBlock = addQuickVariantBlock;
 window.removeQuickVariant = removeQuickVariant;
+
+if (refreshImageUrlsBtnEl) {
+  refreshImageUrlsBtnEl.addEventListener("click", () => {
+    if (!editingProductId) {
+      alert("Open an existing product first.");
+      return;
+    }
+    loadEditImageUrls(editingProductId);
+  });
+}
+
+if (saveThumbnailAfterimageBtnEl) {
+  saveThumbnailAfterimageBtnEl.addEventListener("click", saveThumbnailAfterimage);
+}
+
+if (editThumbnailUrlSelectEl) {
+  editThumbnailUrlSelectEl.addEventListener("change", updateThumbnailAfterimagePreviews);
+}
+
+if (editAfterimageUrlSelectEl) {
+  editAfterimageUrlSelectEl.addEventListener("change", updateThumbnailAfterimagePreviews);
+}
+
+if (customThumbnailUrlInputEl) {
+  customThumbnailUrlInputEl.addEventListener("input", updateThumbnailAfterimagePreviews);
+}
+
+if (customAfterimageUrlInputEl) {
+  customAfterimageUrlInputEl.addEventListener("input", updateThumbnailAfterimagePreviews);
+}
+
+if (applyBulkCreateVariantsBtnEl) {
+  applyBulkCreateVariantsBtnEl.addEventListener("click", applyCreateBulkVariantValues);
+}
+
+if (applyBulkEditVariantsBtnEl) {
+  applyBulkEditVariantsBtnEl.addEventListener("click", applyEditBulkVariantValues);
+}
 
 // Load initial data
 fetchMediaProviderSettings();  // Load media provider before any uploads

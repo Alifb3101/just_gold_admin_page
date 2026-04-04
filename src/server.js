@@ -11,6 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/api/v1", require("./routes/product.routes"));
 app.use("/api/v1", require("./routes/orders.routes"));
+app.use("/api/v1", require("./routes/admin.routes"));
 
 // Static folders
 app.use(express.static(path.join(__dirname, "../public")));

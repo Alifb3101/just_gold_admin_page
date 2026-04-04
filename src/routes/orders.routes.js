@@ -555,6 +555,89 @@ router.patch("/orders/admin/:orderId/status", authenticateAdmin, async (req, res
 });
 
 /**
+ * PATCH /api/v1/orders/admin/:orderId/payment-status
+ * Update payment status (Admin only)
+ *
+ * Body: { "payment_status": "paid" }
+ * Valid statuses: pending, paid, failed, refunded
+ */
+router.patch("/orders/admin/:orderId/payment-status", authenticateAdmin, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { orderId } = req.params;
+    const { payment_status } = req.body;
+
+    const validPaymentStatuses = ["pending", "paid", "failed", "refunded"];
+    if (!payment_status || !validPaymentStatuses.includes(payment_status)) {
+      return res.status(400).json({
+        message: "Invalid payment status",
+        valid_statuses: validPaymentStatuses
+      });
+    }
+
+    await client.query("BEGIN");
+
+    const currentOrder = await client.query(
+      "SELECT id, payment_status, financial_status FROM orders WHERE id = $1",
+      [orderId]
+    );
+
+    if (currentOrder.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const oldPaymentStatus = currentOrder.rows[0].payment_status;
+    const oldFinancialStatus = currentOrder.rows[0].financial_status;
+
+    if (oldPaymentStatus === payment_status) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "Order already has this payment status" });
+    }
+
+    // Keep financial status aligned with payment status.
+    let newFinancialStatus = oldFinancialStatus;
+    if (payment_status === "paid") {
+      newFinancialStatus = "paid";
+    } else if (payment_status === "refunded") {
+      newFinancialStatus = "refunded";
+    } else {
+      newFinancialStatus = "unpaid";
+    }
+
+    await client.query(
+      "UPDATE orders SET payment_status = $1, financial_status = $2, updated_at = NOW() WHERE id = $3",
+      [payment_status, newFinancialStatus, orderId]
+    );
+
+    await client.query(
+      `INSERT INTO order_status_history
+        (order_id, old_order_status, new_order_status, old_financial_status, new_financial_status, changed_at)
+       VALUES ($1, NULL, NULL, $2, $3, NOW())`,
+      [orderId, oldFinancialStatus, newFinancialStatus]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      message: "Payment status updated successfully",
+      order_id: orderId,
+      old_payment_status: oldPaymentStatus,
+      new_payment_status: payment_status,
+      old_financial_status: oldFinancialStatus,
+      new_financial_status: newFinancialStatus
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error updating payment status:", err);
+    res.status(500).json({ message: "Error updating payment status" });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * GET /api/v1/orders/admin/stats
  * Get order statistics (Admin only)
  */

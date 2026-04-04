@@ -81,6 +81,10 @@
               <input type="number" name="base_price" placeholder="Base Price" required>
             </label>
             <label class="field">
+              <span>Base Stock</span>
+              <input type="number" name="base_stock" placeholder="Base Stock" min="0">
+            </label>
+            <label class="field">
               <span>Category</span>
               <select id="categorySelect" name="category_id"></select>
             </label>
@@ -111,7 +115,7 @@
           <label class="field">
             <span>Media Provider</span>
             <select name="media_provider" id="mediaProvider">
-              <option value="local">Local Storage</option>
+              <option value="" selected disabled>Select media provider</option>
               <option value="cloudinary">Cloudinary</option>
               <option value="aws_s3">AWS S3</option>
             </select>
@@ -147,6 +151,25 @@
           <div class="section-head">
             <h2>Color Variants</h2>
             <button type="button" class="ghost" onclick="addVariant()">Add Color</button>
+          </div>
+          <div class="variant-bulk-toolbar" id="createVariantBulkTools">
+            <label class="field compact-field">
+              <span>Stock for all</span>
+              <input type="number" id="bulkStock" placeholder="e.g. 50">
+            </label>
+            <label class="field compact-field">
+              <span>Price for all</span>
+              <input type="number" id="bulkPrice" placeholder="e.g. 99.00" step="0.01">
+            </label>
+            <label class="field compact-field">
+              <span>Discount for all</span>
+              <input type="number" id="bulkDiscount" placeholder="e.g. 79.00" step="0.01">
+            </label>
+            <label class="field checkbox-field bulk-only-empty">
+              <input type="checkbox" id="bulkOnlyEmpty">
+              <div><span>Only fill empty fields</span></div>
+            </label>
+            <button type="button" class="btn-secondary" id="applyBulkCreateVariants">Apply To All Variants</button>
           </div>
           <div id="variants" class="variant-list"></div>
         </div>
@@ -228,6 +251,10 @@
               <input type="number" id="editBasePrice" name="base_price" placeholder="Base Price">
             </label>
             <label class="field">
+              <span>Base Stock</span>
+              <input type="number" id="editBaseStock" name="base_stock" placeholder="Base Stock" min="0">
+            </label>
+            <label class="field">
               <span>Category</span>
               <select id="editCategorySelect" name="category_id"></select>
             </label>
@@ -255,7 +282,7 @@
           <label class="field">
             <span>Media Provider</span>
             <select name="media_provider" id="editMediaProvider">
-              <option value="local">Local Storage</option>
+              <option value="" selected disabled>Select media provider</option>
               <option value="cloudinary">Cloudinary</option>
               <option value="aws_s3">AWS S3</option>
             </select>
@@ -282,8 +309,69 @@
 
         <div class="modal-section">
           <div class="section-head">
+            <h3>Thumbnail &amp; Afterimage (Existing Product Only)</h3>
+            <button type="button" class="ghost" id="refreshImageUrlsBtn">Refresh Image URLs</button>
+          </div>
+          <p class="meta">Recommended flow: fetch image URLs, pick one or both, then send to admin API.</p>
+          <p id="thumbnailAfterimageStatus" class="meta status-line">Load an existing product to fetch image URLs.</p>
+          <label class="field">
+            <span>Thumbnail URL</span>
+            <select id="editThumbnailUrlSelect">
+              <option value="">Do not change thumbnail</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Or Paste Custom Thumbnail URL</span>
+            <input type="url" id="customThumbnailUrlInput" placeholder="https://your-cdn.com/path/thumbnail.jpg">
+          </label>
+          <div class="ta-preview-block">
+            <span class="meta">Selected Thumbnail Preview</span>
+            <div id="thumbnailPreviewBox" class="ta-preview-box">No thumbnail selected</div>
+          </div>
+          <label class="field">
+            <span>Afterimage URL</span>
+            <select id="editAfterimageUrlSelect">
+              <option value="">Do not change afterimage</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Or Paste Custom Afterimage URL</span>
+            <input type="url" id="customAfterimageUrlInput" placeholder="https://your-cdn.com/path/afterimage.jpg">
+          </label>
+          <div class="ta-preview-block">
+            <span class="meta">Selected Afterimage Preview</span>
+            <div id="afterimagePreviewBox" class="ta-preview-box">No afterimage selected</div>
+          </div>
+          <div class="ta-picker-wrap">
+            <span class="meta">Available Images (click to use)</span>
+            <div id="imageUrlPickerGrid" class="ta-image-grid"></div>
+          </div>
+          <button type="button" class="btn-secondary" id="saveThumbnailAfterimageBtn">Save Thumbnail/Afterimage</button>
+        </div>
+
+        <div class="modal-section">
+          <div class="section-head">
             <h3>Color Variants</h3>
             <button type="button" class="ghost" onclick="addEditVariant()">Add New Color</button>
+          </div>
+          <div class="variant-bulk-toolbar" id="editVariantBulkTools">
+            <label class="field compact-field">
+              <span>Stock for all</span>
+              <input type="number" id="editBulkStock" placeholder="e.g. 50">
+            </label>
+            <label class="field compact-field">
+              <span>Price for all</span>
+              <input type="number" id="editBulkPrice" placeholder="e.g. 99.00" step="0.01">
+            </label>
+            <label class="field compact-field">
+              <span>Discount for all</span>
+              <input type="number" id="editBulkDiscount" placeholder="e.g. 79.00" step="0.01">
+            </label>
+            <label class="field checkbox-field bulk-only-empty">
+              <input type="checkbox" id="editBulkOnlyEmpty">
+              <div><span>Only fill empty fields</span></div>
+            </label>
+            <button type="button" class="btn-secondary" id="applyBulkEditVariants">Apply To All Variants</button>
           </div>
           <div id="editVariants" class="variant-list"></div>
         </div>
@@ -306,6 +394,17 @@
     </div>
     <form id="quickVariantForm" enctype="multipart/form-data">
       <div class="modal-body">
+        <div class="modal-section">
+          <h3>Media Storage</h3>
+          <label class="field">
+            <span>Media Provider</span>
+            <select name="media_provider" id="quickMediaProvider" required>
+              <option value="" selected disabled>Select media provider</option>
+              <option value="cloudinary">Cloudinary</option>
+              <option value="aws_s3">AWS S3</option>
+            </select>
+          </label>
+        </div>
         <div class="modal-section quick-variant-body">
           <div class="section-head">
             <h3>New Colors</h3>
