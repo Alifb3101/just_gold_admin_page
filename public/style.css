@@ -377,10 +377,36 @@ textarea {
   gap: 8px;
 }
 
+.hex-picker-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.detect-swatch-field .detect-swatch-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+}
+
+.detect-swatch-status {
+  margin: 4px 0 0;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
 .color-panel-image-inputs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+}
+
+.color-panel-detected-hex {
+  margin: 0;
+  color: var(--accent-dark);
+  font-weight: 600;
 }
 
 .compact-field input[type="text"] {

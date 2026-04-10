@@ -875,6 +875,19 @@ function bindImagePreview(input, previewId) {
     } else {
       preview.innerHTML = "";
     }
+
+    if (this.classList.contains("secondary-image") && this.files && this.files[0]) {
+      const variantEl = this.closest(".variant");
+      const statusEl = variantEl ? variantEl.querySelector(".detect-swatch-status") : null;
+      const detectedHexEl = variantEl ? variantEl.querySelector(".color-panel-detected-hex") : null;
+
+      detectDominantHexFromImageFile(this.files[0]).then((detectedHex) => {
+        if (!detectedHex) return;
+        applyDetectedSwatchToVariant(variantEl, detectedHex, statusEl, detectedHexEl);
+      }).catch((error) => {
+        console.warn("[COLOR PANEL] Secondary swatch auto-detect failed:", error);
+      });
+    }
   });
 }
 
@@ -929,10 +942,17 @@ function colorPanelFieldsMarkup() {
         </select>
       </label>
       <div class="color-panel-input" data-panel="hex">
-        <label class="field compact-field">
-          <span>Hex Value</span>
-          <input type="text" class="color-panel-value-hex" value="#000000" placeholder="#000000">
-        </label>
+        <div class="hex-picker-row">
+          <label class="field compact-field">
+            <span>Hex Value</span>
+            <input type="text" class="color-panel-value-hex" value="#000000" placeholder="#000000">
+          </label>
+          <label class="field compact-field detect-swatch-field">
+            <span>Swatch</span>
+            <button type="button" class="btn-secondary detect-swatch-btn">Detect</button>
+          </label>
+        </div>
+        <p class="meta detect-swatch-status" hidden></p>
       </div>
       <div class="color-panel-input" data-panel="gradient">
         <label class="field">
@@ -947,27 +967,265 @@ function colorPanelFieldsMarkup() {
             <input type="file" class="color-panel-image-file" accept="image/*">
           </label>
           <p class="meta color-panel-image-current" hidden></p>
+          <p class="meta color-panel-detected-hex" hidden></p>
         </div>
       </div>
     </div>
   `;
 }
 
+function rgbToHex(r, g, b) {
+  const clamp = (value) => Math.max(0, Math.min(255, value | 0));
+  const toHex = (value) => clamp(value).toString(16).padStart(2, "0").toUpperCase();
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeHexValue(hex).replace("#", "");
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+}
+
+function rgbToHsl(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    if (max === rn) {
+      h = 60 * (((gn - bn) / delta) % 6);
+    } else if (max === gn) {
+      h = 60 * ((bn - rn) / delta + 2);
+    } else {
+      h = 60 * ((rn - gn) / delta + 4);
+    }
+  }
+
+  if (h < 0) h += 360;
+  return { h, s, l };
+}
+
+function getDepthTone(l) {
+  if (l < 0.22) return "Deep";
+  if (l < 0.42) return "Dark";
+  if (l < 0.62) return "Medium";
+  if (l < 0.82) return "Light";
+  return "Very Light";
+}
+
+function getHueFamily(h, s, l) {
+  if (s < 0.12) {
+    if (l > 0.84) return "Ivory";
+    if (l > 0.68) return "Beige";
+    if (l > 0.5) return "Taupe";
+    if (l > 0.32) return "Gray";
+    return "Black";
+  }
+
+  if (h < 14 || h >= 346) return "Red";
+  if (h < 30) return "Brick";
+  if (h < 45) return "Coral";
+  if (h < 60) return "Orange";
+  if (h < 78) return "Golden";
+  if (h < 102) return "Olive";
+  if (h < 145) return "Green";
+  if (h < 180) return "Teal";
+  if (h < 205) return "Aqua";
+  if (h < 232) return "Blue";
+  if (h < 255) return "Navy";
+  if (h < 278) return "Indigo";
+  if (h < 305) return "Purple";
+  if (h < 332) return "Pink";
+  return "Rose";
+}
+
+function getFinish(s, l) {
+  if (s < 0.12) return "Neutral";
+  if (s < 0.28) return "Soft";
+  if (s < 0.5) return "Natural";
+  if (s < 0.72) return "Rich";
+  return "Bold";
+}
+
+function getColorNameFromHex(hex) {
+  const normalizedHex = normalizeHexValue(hex);
+  const { r, g, b } = hexToRgb(normalizedHex);
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const tone = getDepthTone(l);
+  const family = getHueFamily(h, s, l);
+  const finish = getFinish(s, l);
+  return `${tone} ${family} ${finish}`;
+}
+
+function applyDetectedSwatchToVariant(variantEl, detectedHex, statusEl, detectedHexEl) {
+  if (!variantEl || !detectedHex) {
+    return;
+  }
+
+  const hexInput = variantEl.querySelector(".color-panel-value-hex");
+  const colorInput = variantEl.querySelector(".color");
+  const detectedName = getColorNameFromHex(detectedHex);
+
+  if (hexInput) {
+    hexInput.value = detectedHex;
+  }
+
+  if (colorInput) {
+    colorInput.value = detectedName;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = `Detected from secondary image: ${detectedHex} (${detectedName})`;
+    statusEl.hidden = false;
+  }
+
+  if (detectedHexEl) {
+    detectedHexEl.textContent = `Detected swatch color: ${detectedHex} (${detectedName})`;
+    detectedHexEl.hidden = false;
+  }
+}
+
+function getRgbSaturation(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === 0) return 0;
+  return (max - min) / max;
+}
+
+function getRgbLuminance(r, g, b) {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+async function detectDominantHexFromImageFile(file) {
+  if (!file) {
+    return null;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = objectUrl;
+    });
+
+    const sampleSize = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+    const pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+    const buckets = new Map();
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const a = pixels[i + 3];
+
+      if (a < 40) {
+        continue;
+      }
+
+      const pixelIndex = i / 4;
+      const x = pixelIndex % sampleSize;
+      const y = Math.floor(pixelIndex / sampleSize);
+      const dx = (x - sampleSize / 2) / (sampleSize / 2);
+      const dy = (y - sampleSize / 2) / (sampleSize / 2);
+      const centerWeight = Math.max(0.15, 1 - (dx * dx + dy * dy) * 0.65);
+
+      const sat = getRgbSaturation(r, g, b);
+      const lum = getRgbLuminance(r, g, b);
+
+      // Ignore typical white/gray background pixels so swatch color wins.
+      if ((lum > 235 && sat < 0.15) || (lum > 245 && sat < 0.25)) {
+        continue;
+      }
+
+      const key = `${Math.floor(r / 32)}-${Math.floor(g / 32)}-${Math.floor(b / 32)}`;
+      const bucket = buckets.get(key) || { score: 0, r: 0, g: 0, b: 0 };
+      const score = centerWeight * (0.8 + sat * 1.8);
+
+      bucket.score += score;
+      bucket.r += r * score;
+      bucket.g += g * score;
+      bucket.b += b * score;
+      buckets.set(key, bucket);
+    }
+
+    let winner = null;
+    buckets.forEach((bucket) => {
+      if (!winner || bucket.score > winner.score) {
+        winner = bucket;
+      }
+    });
+
+    if (!winner || winner.score === 0) {
+      return null;
+    }
+
+    return rgbToHex(
+      Math.round(winner.r / winner.score),
+      Math.round(winner.g / winner.score),
+      Math.round(winner.b / winner.score)
+    );
+  } catch (error) {
+    console.warn("[COLOR PANEL] Failed to detect dominant color:", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function normalizeHexValue(value) {
   if (typeof value !== "string") return "#000000";
-  const trimmed = value.trim();
-  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) {
+  const trimmed = value.trim().toUpperCase();
+  if (/^#[0-9A-F]{3}$/.test(trimmed)) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+  }
+  if (/^#[0-9A-F]{6}$/.test(trimmed)) {
     return trimmed;
   }
   return "#000000";
+}
+
+function getValidHexOrNull(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toUpperCase();
+  if (/^#[0-9A-F]{3}$/.test(trimmed) || /^#[0-9A-F]{6}$/.test(trimmed)) {
+    return normalizeHexValue(trimmed);
+  }
+  return null;
 }
 
 function setupColorPanelFields(container, initialType = "hex", initialValue = "") {
   if (!container) return;
   const select = container.querySelector(".color-panel-type");
   const hexInput = container.querySelector(".color-panel-value-hex");
+  const detectSwatchBtn = container.querySelector(".detect-swatch-btn");
+  const detectSwatchStatus = container.querySelector(".detect-swatch-status");
   const gradientInput = container.querySelector(".color-panel-value-gradient");
   const imageCurrent = container.querySelector(".color-panel-image-current");
+  const imageFileInput = container.querySelector(".color-panel-image-file");
+  const detectedHexEl = container.querySelector(".color-panel-detected-hex");
 
   const showPanel = (type) => {
     container.querySelectorAll(".color-panel-input").forEach(panel => {
@@ -979,7 +1237,8 @@ function setupColorPanelFields(container, initialType = "hex", initialValue = ""
   select.value = typeToSet;
 
   if (typeToSet === "hex" && hexInput) {
-    hexInput.value = initialValue ? normalizeHexValue(initialValue) : hexInput.value;
+    const normalized = initialValue ? normalizeHexValue(initialValue) : normalizeHexValue(hexInput.value);
+    hexInput.value = normalized;
   }
   if (typeToSet === "gradient" && gradientInput && initialValue) {
     gradientInput.value = initialValue;
@@ -988,6 +1247,68 @@ function setupColorPanelFields(container, initialType = "hex", initialValue = ""
     imageCurrent.textContent = `Current: ${initialValue}`;
     imageCurrent.hidden = false;
     container.dataset.initialPanelValue = initialValue;
+  }
+
+  if (hexInput) {
+    hexInput.addEventListener("blur", () => {
+      const normalized = normalizeHexValue(hexInput.value);
+      hexInput.value = normalized;
+    });
+  }
+
+  if (imageFileInput && hexInput) {
+    imageFileInput.addEventListener("change", async () => {
+      if (detectedHexEl) {
+        detectedHexEl.hidden = true;
+      }
+
+      const file = imageFileInput.files && imageFileInput.files[0];
+      if (!file) {
+        return;
+      }
+
+      const detectedHex = await detectDominantHexFromImageFile(file);
+      if (!detectedHex) {
+        return;
+      }
+
+      const variantEl = container.closest(".variant");
+      applyDetectedSwatchToVariant(variantEl, detectedHex, detectSwatchStatus, detectedHexEl);
+    });
+  }
+
+  if (detectSwatchBtn && hexInput) {
+    detectSwatchBtn.addEventListener("click", async () => {
+      const variantEl = container.closest(".variant");
+      const secondaryImageInput = variantEl ? variantEl.querySelector(".secondary-image") : null;
+      const swatchFile = secondaryImageInput && secondaryImageInput.files ? secondaryImageInput.files[0] : null;
+
+      if (detectSwatchStatus) {
+        detectSwatchStatus.hidden = true;
+      }
+
+      if (!swatchFile) {
+        alert("Please upload swatch image in Secondary Image first.");
+        return;
+      }
+
+      detectSwatchBtn.disabled = true;
+      detectSwatchBtn.textContent = "Detecting...";
+
+      try {
+        const detectedHex = await detectDominantHexFromImageFile(swatchFile);
+        if (!detectedHex) {
+          alert("Could not detect swatch color from Secondary Image.");
+          return;
+        }
+
+        const variantEl = container.closest(".variant");
+        applyDetectedSwatchToVariant(variantEl, detectedHex, detectSwatchStatus, detectedHexEl);
+      } finally {
+        detectSwatchBtn.disabled = false;
+        detectSwatchBtn.textContent = "Detect";
+      }
+    });
   }
 
   select.addEventListener("change", () => showPanel(select.value));
@@ -1004,7 +1325,7 @@ function collectColorPanelData(variantEl, formData, variantIndex) {
   let value = null;
 
   if (type === "hex" && hexInput) {
-    value = hexInput.value.trim() || null;
+    value = normalizeHexValue(hexInput.value);
   } else if (type === "gradient" && gradientInput) {
     value = gradientInput.value.trim() || null;
   } else if (type === "image") {
