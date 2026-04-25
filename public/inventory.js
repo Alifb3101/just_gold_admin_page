@@ -417,6 +417,10 @@ function editProduct(productId) {
   editingId = productId;
   editingType = 'product';
   
+  // Get product data to check for variants
+  const product = allProducts.find(p => p.product_id === productId);
+  const hasVariants = product && product.variants && product.variants.length > 0;
+  
   // Toggle edit mode for this product row using DOM manipulation
   const row = document.querySelector(`tr[data-product-id="${productId}"]`);
   if (!row) return;
@@ -437,7 +441,22 @@ function editProduct(productId) {
     const displaySpan = stockCell.querySelector('.stock-badge');
     const input = stockCell.querySelector('.edit-input');
     if (displaySpan) displaySpan.style.display = 'none';
-    if (input) input.style.display = 'block';
+    
+    // Only allow stock editing if no variants exist
+    if (hasVariants) {
+      if (input) {
+        input.style.display = 'none';
+        input.disabled = true;
+      }
+      // Show warning message
+      const warning = document.createElement('span');
+      warning.className = 'stock-warning';
+      warning.textContent = 'Edit variant stocks instead';
+      warning.style.cssText = 'color: #e74c3c; font-size: 0.8rem; font-style: italic;';
+      stockCell.appendChild(warning);
+    } else {
+      if (input) input.style.display = 'block';
+    }
   }
   
   if (actionBtns) {
@@ -510,8 +529,12 @@ function cancelEdit() {
       if (stockCell) {
         const displaySpan = stockCell.querySelector('.stock-badge');
         const input = stockCell.querySelector('.edit-input');
+        const warning = stockCell.querySelector('.stock-warning');
+        
         if (displaySpan) displaySpan.style.display = '';
         if (input) input.style.display = 'none';
+        if (input) input.disabled = false;
+        if (warning) warning.remove();
       }
       
       if (actionBtns) {
@@ -567,9 +590,15 @@ async function saveProduct(productId) {
 
   const priceInput = document.getElementById(`price-${productId}`);
   const stockInput = document.getElementById(`stock-${productId}`);
+  
+  // Get product data
+  const product = allProducts.find(p => p.product_id === productId);
+  const hasVariants = product && product.variants && product.variants.length > 0;
+  const oldBasePrice = product ? product.base_price : 0;
 
   let priceUpdated = false;
   let stockUpdated = false;
+  let newBasePrice = oldBasePrice;
 
   if (priceInput) {
     const price = parseFloat(priceInput.value);
@@ -586,6 +615,7 @@ async function saveProduct(productId) {
 
         if (!response.ok) throw new Error('Failed to update price');
         priceUpdated = true;
+        newBasePrice = price;
       } catch (error) {
         console.error('Update price error:', error);
         showError('Failed to update price');
@@ -594,7 +624,8 @@ async function saveProduct(productId) {
     }
   }
 
-  if (stockInput) {
+  // Only update stock if no variants exist
+  if (stockInput && !hasVariants) {
     const stock = parseInt(stockInput.value);
     if (!isNaN(stock) && stock >= 0) {
       try {
@@ -615,6 +646,49 @@ async function saveProduct(productId) {
         return;
       }
     }
+  }
+  
+  // If base price changed and product has variants, update all variant prices proportionally
+  if (priceUpdated && hasVariants && newBasePrice !== oldBasePrice && oldBasePrice > 0) {
+    const priceRatio = newBasePrice / oldBasePrice;
+    
+    for (const variant of product.variants) {
+      const newVariantPrice = parseFloat((variant.price * priceRatio).toFixed(2));
+      let newVariantDiscount = null;
+      
+      if (variant.discount_price) {
+        newVariantDiscount = parseFloat((variant.discount_price * priceRatio).toFixed(2));
+      }
+      
+      try {
+        // Update variant price
+        await fetch(`${API_BASE}/inventory/admin/variants/${variant.id}/price`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ price: newVariantPrice })
+        });
+        
+        // Update variant discount if exists
+        if (newVariantDiscount) {
+          await fetch(`${API_BASE}/inventory/admin/variants/${variant.id}/discount-price`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ discount_price: newVariantDiscount })
+          });
+        }
+      } catch (error) {
+        console.error('Failed to update variant price:', error);
+      }
+    }
+    
+    // Reload inventory to show updated variant prices
+    await loadInventory();
   }
 
   // Update display values directly without re-rendering
