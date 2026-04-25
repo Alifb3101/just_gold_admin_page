@@ -1,0 +1,2586 @@
+const MAX_GALLERY = 6;
+const selectedImages = [];
+const PRODUCTS_PER_PAGE = 10;
+let currentPage = 1;
+let totalProductPages = 1;
+let isLoadingProducts = false;
+let allProducts = [];
+let filteredProducts = [];
+let currentSearchQuery = '';
+let categories = [];
+const BEST_SELLER_SUBCATEGORY_ID = "3";
+const TAG_CODE_REGEX = /^[A-Z0-9_-]{1,24}$/;
+
+// Media provider options are fetched from backend settings when available.
+let availableProviders = ['cloudinary', 'aws_s3'];
+
+const categorySelectEl = document.getElementById("categorySelect");
+const subcategorySelectEl = document.getElementById("subcategorySelect");
+const categoryStatusEl = document.getElementById("categoryStatus");
+const productListStatusEl = document.getElementById("productListStatus");
+const productPaginationEl = document.getElementById("productPagination");
+const productPaginationInfoEl = document.getElementById("productPaginationInfo");
+const productPrevPageBtn = document.getElementById("productPrevPage");
+const productNextPageBtn = document.getElementById("productNextPage");
+const tagsInputEl = document.getElementById("tagsInput");
+const bestSellerToggleEl = document.getElementById("bestSellerToggle");
+const editTagsInputEl = document.getElementById("editTagsInput");
+const editBestSellerToggleEl = document.getElementById("editBestSellerToggle");
+const mediaProviderEl = document.getElementById("mediaProvider");
+const editMediaProviderEl = document.getElementById("editMediaProvider");
+const quickMediaProviderEl = document.getElementById("quickMediaProvider");
+const editThumbnailUrlSelectEl = document.getElementById("editThumbnailUrlSelect");
+const editAfterimageUrlSelectEl = document.getElementById("editAfterimageUrlSelect");
+const thumbnailAfterimageStatusEl = document.getElementById("thumbnailAfterimageStatus");
+const refreshImageUrlsBtnEl = document.getElementById("refreshImageUrlsBtn");
+const saveThumbnailAfterimageBtnEl = document.getElementById("saveThumbnailAfterimageBtn");
+const thumbnailPreviewBoxEl = document.getElementById("thumbnailPreviewBox");
+const afterimagePreviewBoxEl = document.getElementById("afterimagePreviewBox");
+const imageUrlPickerGridEl = document.getElementById("imageUrlPickerGrid");
+const customThumbnailUrlInputEl = document.getElementById("customThumbnailUrlInput");
+const customAfterimageUrlInputEl = document.getElementById("customAfterimageUrlInput");
+const applyBulkCreateVariantsBtnEl = document.getElementById("applyBulkCreateVariants");
+const applyBulkEditVariantsBtnEl = document.getElementById("applyBulkEditVariants");
+
+function getMediaProviderLabel(provider) {
+  const labels = {
+    cloudinary: "Cloudinary",
+    aws_s3: "AWS S3",
+    imagekit: "ImageKit"
+  };
+  return labels[provider] || provider;
+}
+
+function renderMediaProviderOptions(providers) {
+  const normalizedProviders = Array.from(new Set((providers || [])
+    .filter(Boolean)
+    .map(value => String(value).trim())
+    .filter(value => value && value !== "local")));
+
+  if (!normalizedProviders.length) {
+    return;
+  }
+
+  const optionsHtml = [
+    '<option value="" selected disabled>Select media provider</option>',
+    ...normalizedProviders.map(provider => `<option value="${provider}">${getMediaProviderLabel(provider)}</option>`)
+  ].join("");
+
+  if (mediaProviderEl) {
+    mediaProviderEl.innerHTML = optionsHtml;
+  }
+
+  if (editMediaProviderEl) {
+    editMediaProviderEl.innerHTML = optionsHtml;
+  }
+
+  if (quickMediaProviderEl) {
+    quickMediaProviderEl.innerHTML = optionsHtml;
+  }
+}
+
+function getSelectedMediaProvider(selectElement, context) {
+  const selectedProvider = selectElement?.value?.trim();
+  if (!selectedProvider) {
+    alert(`Please select a media provider before ${context}.`);
+    return null;
+  }
+  return selectedProvider;
+}
+
+function applyBulkValuesToVariants(containerSelector, values, onlyEmpty = false) {
+  const variants = Array.from(document.querySelectorAll(`${containerSelector} .variant`))
+    .filter(variant => !variant.classList.contains("marked-for-deletion"));
+
+  if (!variants.length) {
+    alert("No variants found to update.");
+    return;
+  }
+
+  const hasValue = values.stock !== "" || values.price !== "" || values.discount !== "";
+  if (!hasValue) {
+    alert("Enter at least one value (stock, price, or discount) to apply.");
+    return;
+  }
+
+  let updatedFields = 0;
+
+  variants.forEach((variant) => {
+    const stockInput = variant.querySelector(".stock");
+    const priceInput = variant.querySelector(".price");
+    const discountInput = variant.querySelector(".discount");
+
+    if (stockInput && values.stock !== "" && (!onlyEmpty || !String(stockInput.value || "").trim())) {
+      stockInput.value = values.stock;
+      updatedFields += 1;
+    }
+    if (priceInput && values.price !== "" && (!onlyEmpty || !String(priceInput.value || "").trim())) {
+      priceInput.value = values.price;
+      updatedFields += 1;
+    }
+    if (discountInput && values.discount !== "" && (!onlyEmpty || !String(discountInput.value || "").trim())) {
+      discountInput.value = values.discount;
+      updatedFields += 1;
+    }
+  });
+
+  alert(`Bulk update complete. Updated ${updatedFields} field(s) across ${variants.length} variant(s).`);
+}
+
+function applyCreateBulkVariantValues() {
+  applyBulkValuesToVariants("#variants", {
+    stock: (document.getElementById("bulkStock")?.value || "").trim(),
+    price: (document.getElementById("bulkPrice")?.value || "").trim(),
+    discount: (document.getElementById("bulkDiscount")?.value || "").trim()
+  }, document.getElementById("bulkOnlyEmpty")?.checked === true);
+}
+
+function applyEditBulkVariantValues() {
+  applyBulkValuesToVariants("#editVariants", {
+    stock: (document.getElementById("editBulkStock")?.value || "").trim(),
+    price: (document.getElementById("editBulkPrice")?.value || "").trim(),
+    discount: (document.getElementById("editBulkDiscount")?.value || "").trim()
+  }, document.getElementById("editBulkOnlyEmpty")?.checked === true);
+}
+
+function setThumbnailAfterimageStatus(message) {
+  if (thumbnailAfterimageStatusEl) {
+    thumbnailAfterimageStatusEl.textContent = message;
+  }
+}
+
+function getImageUrlLabel(item) {
+  const source = item?.source ? String(item.source) : (item?.type ? String(item.type).replace(/_/g, " ") : "image");
+  const shade = item?.shade ? ` (shade ${item.shade})` : "";
+  return `${source}${shade} - ${item?.url || ""}`;
+}
+
+function renderImagePreview(targetEl, url, emptyText) {
+  if (!targetEl) {
+    return;
+  }
+
+  const safeUrl = typeof url === "string" ? url.trim() : "";
+  if (!safeUrl) {
+    targetEl.textContent = emptyText;
+    return;
+  }
+
+  targetEl.innerHTML = `<img src="${safeUrl}" alt="Selected image preview" loading="lazy">`;
+}
+
+function getPreferredThumbnailUrl() {
+  const custom = customThumbnailUrlInputEl?.value?.trim() || "";
+  if (custom) {
+    return custom;
+  }
+  return editThumbnailUrlSelectEl?.value?.trim() || "";
+}
+
+function getPreferredAfterimageUrl() {
+  const custom = customAfterimageUrlInputEl?.value?.trim() || "";
+  if (custom) {
+    return custom;
+  }
+  return editAfterimageUrlSelectEl?.value?.trim() || "";
+}
+
+function updateThumbnailAfterimagePreviews() {
+  renderImagePreview(
+    thumbnailPreviewBoxEl,
+    getPreferredThumbnailUrl(),
+    "No thumbnail selected"
+  );
+
+  renderImagePreview(
+    afterimagePreviewBoxEl,
+    getPreferredAfterimageUrl(),
+    "No afterimage selected"
+  );
+}
+
+function renderImagePickerGrid(imageUrls = []) {
+  if (!imageUrlPickerGridEl) {
+    return;
+  }
+
+  imageUrlPickerGridEl.innerHTML = "";
+
+  if (!imageUrls.length) {
+    imageUrlPickerGridEl.innerHTML = '<p class="meta">No images returned by API.</p>';
+    return;
+  }
+
+  imageUrls.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "ta-image-card";
+
+    const img = document.createElement("img");
+    img.src = item.url;
+    img.alt = "Available product image";
+    img.loading = "lazy";
+
+    const meta = document.createElement("p");
+    meta.className = "meta";
+    meta.textContent = item.source || "image";
+
+    const actions = document.createElement("div");
+    actions.className = "ta-image-actions";
+
+    const thumbBtn = document.createElement("button");
+    thumbBtn.type = "button";
+    thumbBtn.className = "btn-secondary";
+    thumbBtn.textContent = "Use as Thumbnail";
+    thumbBtn.addEventListener("click", () => {
+      if (editThumbnailUrlSelectEl) {
+        editThumbnailUrlSelectEl.value = item.url;
+        if (customThumbnailUrlInputEl) {
+          customThumbnailUrlInputEl.value = "";
+        }
+        updateThumbnailAfterimagePreviews();
+      }
+    });
+
+    const afterBtn = document.createElement("button");
+    afterBtn.type = "button";
+    afterBtn.className = "btn-secondary";
+    afterBtn.textContent = "Use as Afterimage";
+    afterBtn.addEventListener("click", () => {
+      if (editAfterimageUrlSelectEl) {
+        editAfterimageUrlSelectEl.value = item.url;
+        if (customAfterimageUrlInputEl) {
+          customAfterimageUrlInputEl.value = "";
+        }
+        updateThumbnailAfterimagePreviews();
+      }
+    });
+
+    actions.appendChild(thumbBtn);
+    actions.appendChild(afterBtn);
+    card.appendChild(img);
+    card.appendChild(meta);
+    card.appendChild(actions);
+    imageUrlPickerGridEl.appendChild(card);
+  });
+}
+
+function normalizeImageUrlPayload(data) {
+  const list = Array.isArray(data?.urls)
+    ? data.urls
+    : (Array.isArray(data?.image_urls) ? data.image_urls : []);
+
+  const normalizedUrls = list
+    .filter(item => item && typeof item.url === "string" && item.url.trim())
+    .map(item => ({
+      url: item.url.trim(),
+      source: item.source || item.type || "image",
+      variant_id: item.variant_id || item.reference_id || null,
+      shade: item.shade || null
+    }));
+
+  const current = {
+    thumbnail: typeof data?.current?.thumbnail === "string" ? data.current.thumbnail.trim() : "",
+    afterimage: typeof data?.current?.afterimage === "string" ? data.current.afterimage.trim() : ""
+  };
+
+  return { normalizedUrls, current };
+}
+
+function renderThumbnailAfterimageOptions(imageUrls = [], current = {}) {
+  if (!editThumbnailUrlSelectEl || !editAfterimageUrlSelectEl) {
+    return;
+  }
+
+  const uniqueUrls = Array.from(new Set((imageUrls || [])
+    .map(item => (typeof item?.url === "string" ? item.url.trim() : ""))
+    .filter(Boolean)));
+
+  const defaultThumb = typeof current.thumbnail === "string" ? current.thumbnail.trim() : "";
+  const defaultAfter = typeof current.afterimage === "string" ? current.afterimage.trim() : "";
+
+  const options = ['<option value="">Do not change</option>'];
+  uniqueUrls.forEach((url) => {
+    const item = (imageUrls || []).find(entry => entry.url === url) || { url, type: "image" };
+    options.push(`<option value="${url}">${getImageUrlLabel(item)}</option>`);
+  });
+
+  editThumbnailUrlSelectEl.innerHTML = options.join("");
+  editAfterimageUrlSelectEl.innerHTML = options.join("");
+
+  if (defaultThumb && uniqueUrls.includes(defaultThumb)) {
+    editThumbnailUrlSelectEl.value = defaultThumb;
+  } else {
+    editThumbnailUrlSelectEl.value = "";
+  }
+
+  if (defaultAfter && uniqueUrls.includes(defaultAfter)) {
+    editAfterimageUrlSelectEl.value = defaultAfter;
+  } else {
+    editAfterimageUrlSelectEl.value = "";
+  }
+
+  updateThumbnailAfterimagePreviews();
+  renderImagePickerGrid(imageUrls);
+}
+
+async function loadEditImageUrls(productId) {
+  if (!productId) {
+    return;
+  }
+
+  setThumbnailAfterimageStatus("Loading image URLs...");
+  if (refreshImageUrlsBtnEl) {
+    refreshImageUrlsBtnEl.disabled = true;
+  }
+
+  try {
+    const response = await fetchWithAuth(`/admin/products/${productId}/image-urls`);
+    if (!response) {
+      return;
+    }
+
+    const data = await response.json();
+    const { normalizedUrls, current } = normalizeImageUrlPayload(data);
+    renderThumbnailAfterimageOptions(normalizedUrls, current);
+    setThumbnailAfterimageStatus(`${normalizedUrls.length} image URL(s) loaded. Select thumbnail and/or afterimage.`);
+  } catch (error) {
+    console.error("[THUMBNAIL AFTERIMAGE] Failed to load image URLs:", error);
+    setThumbnailAfterimageStatus("Failed to load image URLs.");
+  } finally {
+    if (refreshImageUrlsBtnEl) {
+      refreshImageUrlsBtnEl.disabled = false;
+    }
+  }
+}
+
+async function saveThumbnailAfterimage() {
+  if (!editingProductId) {
+    alert("Open an existing product first.");
+    return;
+  }
+
+  const thumbnail = getPreferredThumbnailUrl();
+  const afterimage = getPreferredAfterimageUrl();
+  const payload = {};
+
+  if (thumbnail) {
+    payload.thumbnail = thumbnail;
+  }
+  if (afterimage) {
+    payload.afterimage = afterimage;
+  }
+
+  if (!payload.thumbnail && !payload.afterimage) {
+    alert("Select thumbnail or afterimage before saving.");
+    return;
+  }
+
+  setButtonLoading(saveThumbnailAfterimageBtnEl, true, "Saving...");
+  setThumbnailAfterimageStatus("Saving thumbnail/afterimage...");
+
+  try {
+    const response = await fetchWithAuth(`/admin/products/${editingProductId}/thumbnail-afterimage`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    if (!response) {
+      return;
+    }
+
+    const result = await response.json();
+    setThumbnailAfterimageStatus("Thumbnail/afterimage updated successfully.");
+    alert(result.message || "Thumbnail/afterimage updated successfully.");
+    await loadEditImageUrls(editingProductId);
+  } catch (error) {
+    console.error("[THUMBNAIL AFTERIMAGE] Save failed:", error);
+    setThumbnailAfterimageStatus("Failed to update thumbnail/afterimage.");
+    alert(error.message || "Failed to update thumbnail/afterimage.");
+  } finally {
+    setButtonLoading(saveThumbnailAfterimageBtnEl, false);
+  }
+}
+
+
+function formatCurrency(value) {
+  if (value === undefined || value === null || value === "") {
+    return "—";
+  }
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return `AED ${parsed.toFixed(2)}`;
+}
+
+function findParentCategoryId(childId) {
+  if (!childId) return null;
+  for (const cat of categories) {
+    if (Array.isArray(cat.subcategories)) {
+      const match = cat.subcategories.find(sub => String(sub.id) === String(childId));
+      if (match) {
+        return cat.id;
+      }
+    }
+  }
+  return null;
+}
+
+function buildTagsPayload(rawValue) {
+  if (rawValue && typeof rawValue !== "string") {
+    return { ok: false, message: "Tags value must be a JSON string" };
+  }
+
+  let parsed = [];
+  if (rawValue && rawValue.trim()) {
+    try {
+      parsed = JSON.parse(rawValue.trim());
+    } catch (err) {
+      return { ok: false, message: "Tags must be valid JSON (array of tag objects)" };
+    }
+
+    if (!Array.isArray(parsed)) {
+      return { ok: false, message: "Tags JSON must be an array" };
+    }
+  }
+
+  const tags = [];
+  const seen = new Set();
+
+  for (const tag of parsed) {
+    if (!tag || typeof tag !== "object") {
+      return { ok: false, message: "Each tag must be an object" };
+    }
+
+    const type = tag.type;
+    const code = typeof tag.code === "string" ? tag.code.toUpperCase() : "";
+
+    if (type !== "country" && type !== "badge") {
+      return { ok: false, message: "Tag type must be 'country' or 'badge'" };
+    }
+    if (!TAG_CODE_REGEX.test(code)) {
+      return { ok: false, message: "Tag code must be 1-24 chars (A-Z, 0-9, _ or -)" };
+    }
+
+    const key = `${type}:${code}`;
+    if (!seen.has(key)) {
+      tags.push({ type, code });
+      seen.add(key);
+    }
+  }
+
+  if (tags.length > 20) {
+    return { ok: false, message: "Maximum 20 tags allowed" };
+  }
+
+  return { ok: true, tags };
+}
+
+/* =========================
+   LOAD CATEGORIES
+========================= */
+
+async function loadCategories() {
+  if (!categorySelectEl || !subcategorySelectEl) return;
+  if (categoryStatusEl) {
+    categoryStatusEl.textContent = "Loading categories…";
+  }
+
+  try {
+    const res = await fetchWithAuth(`/categories`);
+    if (!res) return; // fetchWithAuth handles 401
+    
+    categories = await res.json();
+    console.log("📦 Categories Loaded:", categories);
+    
+    categorySelectEl.innerHTML = "";
+    subcategorySelectEl.innerHTML = "";
+
+    if (!categories.length) {
+      console.warn("⚠️ No categories returned from API");
+      categorySelectEl.innerHTML = '<option value="">No categories found</option>';
+      subcategorySelectEl.innerHTML = '<option value="">No subcategories</option>';
+      if (categoryStatusEl) {
+        categoryStatusEl.textContent = "No categories available";
+      }
+      return;
+    }
+
+    categories.forEach(cat => {
+      const option = document.createElement("option");
+      option.value = cat.id;
+      option.textContent = cat.name;
+      categorySelectEl.appendChild(option);
+      console.log("  ✓ Added category:", cat.id, cat.name);
+    });
+
+    categorySelectEl.value = categories[0].id;
+    console.log("✓ Default category set to:", categories[0].id);
+    
+    const firstSubId = categories[0].subcategories?.[0]?.id;
+    loadSubcategories(firstSubId);
+
+    if (categoryStatusEl) {
+      categoryStatusEl.textContent = `${categories.length} categories loaded`;
+    }
+  } catch (err) {
+    console.error("❌ Category Load Error:", err);
+    categorySelectEl.innerHTML = '<option value="">Unavailable</option>';
+    subcategorySelectEl.innerHTML = '<option value="">Unavailable</option>';
+    if (categoryStatusEl) {
+      categoryStatusEl.textContent = "Failed to load categories";
+    }
+  }
+}
+
+function loadSubcategories(selectedSubId) {
+  if (!categorySelectEl || !subcategorySelectEl) return;
+  const categoryId = categorySelectEl.value;
+
+  console.log("📂 Loading Subcategories for Category ID:", categoryId);
+
+  subcategorySelectEl.innerHTML = "";
+
+  if (!categoryId) {
+    console.warn("⚠️ No category selected");
+    subcategorySelectEl.innerHTML = '<option value="">Select a category first</option>';
+    return;
+  }
+
+  const selectedCategory = categories.find(c => String(c.id) === String(categoryId));
+
+  if (!selectedCategory || !Array.isArray(selectedCategory.subcategories) || selectedCategory.subcategories.length === 0) {
+    console.log("  No subcategories available for category:", categoryId);
+    subcategorySelectEl.innerHTML = '<option value="">No subcategories</option>';
+    return;
+  }
+
+  console.log(`  Found ${selectedCategory.subcategories.length} subcategories`);
+  selectedCategory.subcategories.forEach(sub => {
+    const option = document.createElement("option");
+    option.value = sub.id;
+    option.textContent = sub.name;
+    if (selectedSubId && String(sub.id) === String(selectedSubId)) {
+      option.selected = true;
+    }
+    subcategorySelectEl.appendChild(option);
+    console.log("  ✓ Added subcategory:", sub.id, sub.name);
+  });
+
+  if (!selectedSubId) {
+    subcategorySelectEl.selectedIndex = 0;
+  }
+}
+
+if (categorySelectEl) {
+  categorySelectEl.addEventListener("change", () => loadSubcategories());
+}
+
+/* =========================
+   LOAD PRODUCTS
+========================= */
+
+async function fetchProductsPage(page, limit) {
+  const params = new URLSearchParams({ page, limit });
+  console.log(`🔄 Fetching products page ${page} (limit: ${limit})`);
+  
+  const res = await fetchWithAuth(`/products?${params.toString()}`);
+  if (!res) {
+    throw new Error('Authentication failed');
+  }
+  
+  const data = await res.json();
+  console.log(`  ✅ Got ${data.products ? data.products.length : 0} products, total_pages: ${data.total_pages}`);
+  
+  return data;
+}
+
+async function fetchAllProducts() {
+  const productsById = new Map();
+  let page = 1;
+  let guard = 0;
+  const maxPages = 100;
+
+  while (guard < maxPages) {
+    const data = await fetchProductsPage(page, PRODUCTS_PER_PAGE);
+    const products = Array.isArray(data.products) ? data.products : [];
+    const reportedTotalPages = Number(data.total_pages) || 0;
+
+    products.forEach((product) => {
+      productsById.set(product.id, product);
+    });
+
+    const hasMoreFromTotal = reportedTotalPages > 0 ? page < reportedTotalPages : false;
+    const hasMoreFromPage = products.length === PRODUCTS_PER_PAGE;
+
+    if (!hasMoreFromTotal && !hasMoreFromPage) {
+      break;
+    }
+
+    page += 1;
+    guard += 1;
+  }
+
+  return Array.from(productsById.values());
+}
+
+async function loadProducts() {
+  if (isLoadingProducts) {
+    return;
+  }
+
+  isLoadingProducts = true;
+  if (productListStatusEl) {
+    productListStatusEl.textContent = "Loading…";
+  }
+
+  try {
+    // Only fetch all products once, then filter/paginate client-side
+    if (allProducts.length === 0) {
+      allProducts = await fetchAllProducts();
+    }
+    
+    // Apply search filter
+    filterProducts();
+    
+    // Render current page
+    renderProductsPage();
+    
+  } catch (err) {
+    console.error("Load Products Error:", err);
+    if (productListStatusEl) {
+      productListStatusEl.textContent = "Failed to load";
+    }
+    const container = document.getElementById("productList");
+    if (container) {
+      container.innerHTML = '<tr><td colspan="3" class="loading-cell">Error loading products</td></tr>';
+    }
+  } finally {
+    isLoadingProducts = false;
+  }
+}
+
+function filterProducts() {
+  const searchInput = document.getElementById('productSearchInput');
+  currentSearchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  
+  if (currentSearchQuery) {
+    filteredProducts = allProducts.filter(p => 
+      (p.name && p.name.toLowerCase().includes(currentSearchQuery)) ||
+      (p.category && p.category.toLowerCase().includes(currentSearchQuery))
+    );
+  } else {
+    filteredProducts = [...allProducts];
+  }
+  
+  // Reset to page 1 when filtering
+  currentPage = 1;
+  updateProductPagination();
+}
+
+function renderProductsPage() {
+  const container = document.getElementById("productList");
+  if (!container) return;
+  
+  container.innerHTML = "";
+
+  if (filteredProducts.length === 0) {
+    container.innerHTML = '<tr><td colspan="3" class="loading-cell">No products found</td></tr>';
+    if (productListStatusEl) {
+      productListStatusEl.textContent = currentSearchQuery ? `No results for "${currentSearchQuery}"` : "No products";
+    }
+    return;
+  }
+
+  // Calculate pagination
+  const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+  const endIndex = Math.min(startIndex + PRODUCTS_PER_PAGE, filteredProducts.length);
+  const pageProducts = filteredProducts.slice(startIndex, endIndex);
+
+  pageProducts.forEach(p => {
+    const row = document.createElement("tr");
+    row.className = "product-row";
+
+    const canEdit = true;
+    const canDelete = true;
+    const canAddColor = true;
+
+    let actionButtons = '';
+    if (canEdit) {
+      actionButtons += `<button class="action-icon edit" onclick="editProduct('${p.slug}', ${p.id})" title="Edit">✎</button>`;
+    }
+    if (canAddColor) {
+      actionButtons += `<button class="action-icon color" data-product-id="${p.id}" title="Add Color">+</button>`;
+    }
+    if (canDelete) {
+      actionButtons += `<button class="action-icon delete" onclick="deleteProduct(${p.id})" title="Delete">×</button>`;
+    }
+
+    row.innerHTML = `
+      <td>
+        <div class="product-cell">
+          <span class="product-name">${escapeHtml(p.name)}</span>
+          <span class="product-category">${escapeHtml(p.category || "Uncategorized")}</span>
+        </div>
+      </td>
+      <td class="product-price">${formatCurrency(p.base_price)}</td>
+      <td class="product-actions-cell">
+        ${actionButtons}
+      </td>
+    `;
+
+    const quickBtn = row.querySelector(".action-icon.color");
+    if (quickBtn) {
+      quickBtn.addEventListener("click", () => openQuickVariant(p.id, p.name || "Product"));
+    }
+
+    container.appendChild(row);
+  });
+
+  if (productListStatusEl) {
+    const showingText = filteredProducts.length === allProducts.length 
+      ? `${allProducts.length} total`
+      : `${filteredProducts.length} of ${allProducts.length}`;
+    productListStatusEl.textContent = `Page ${currentPage} of ${totalProductPages} · ${showingText}`;
+  }
+  
+  updatePaginationButtons();
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function updateProductPagination() {
+  totalProductPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE) || 1;
+  if (currentPage > totalProductPages) {
+    currentPage = totalProductPages;
+  }
+}
+
+function updatePaginationButtons() {
+  if (productPrevPageBtn) {
+    productPrevPageBtn.disabled = currentPage <= 1;
+  }
+  if (productNextPageBtn) {
+    productNextPageBtn.disabled = currentPage >= totalProductPages;
+  }
+  if (productPaginationInfoEl) {
+    productPaginationInfoEl.textContent = `${currentPage} / ${totalProductPages}`;
+  }
+}
+
+function goToProductPage(page) {
+  if (page < 1 || page > totalProductPages) return;
+  currentPage = page;
+  renderProductsPage();
+}
+
+if (productPrevPageBtn) {
+  productPrevPageBtn.addEventListener("click", () => {
+    goToProductPage(currentPage - 1);
+  });
+}
+
+if (productNextPageBtn) {
+  productNextPageBtn.addEventListener("click", () => {
+    goToProductPage(currentPage + 1);
+  });
+}
+
+
+/* =========================
+   GALLERY HANDLING
+========================= */
+
+const galleryInput = document.getElementById("galleryInput");
+const galleryPreview = document.getElementById("galleryPreview");
+const galleryCounter = document.getElementById("galleryCounter");
+const videoInput = document.getElementById("videoInput");
+const videoMeta = document.getElementById("videoMeta");
+
+function setButtonLoading(button, isLoading, loadingText = "Loading…") {
+  if (!button) return;
+  if (isLoading) {
+    button.dataset.originalText = button.textContent;
+    button.textContent = loadingText;
+    button.disabled = true;
+    button.classList.add("is-loading");
+  } else {
+    button.textContent = button.dataset.originalText || button.textContent;
+    button.disabled = false;
+    button.classList.remove("is-loading");
+  }
+}
+
+function getFileKey(file) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function updateGalleryCounter() {
+  galleryCounter.textContent = `${selectedImages.length} / ${MAX_GALLERY} selected`;
+}
+
+function renderGallery() {
+  galleryPreview.innerHTML = "";
+
+  selectedImages.forEach((item, index) => {
+    const tile = document.createElement("div");
+    tile.className = "preview-tile";
+
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(item.file);
+    img.src = url;
+    img.onload = () => URL.revokeObjectURL(url);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      selectedImages.splice(index, 1);
+      renderGallery();
+      updateGalleryCounter();
+    });
+
+    tile.appendChild(img);
+    tile.appendChild(removeBtn);
+    galleryPreview.appendChild(tile);
+  });
+}
+
+galleryInput.addEventListener("change", () => {
+  const files = Array.from(galleryInput.files || []);
+  console.log(`🖼️ GALLERY INPUT CHANGE: ${files.length} files selected`);
+  
+  const existingKeys = new Set(selectedImages.map(item => item.key));
+
+  files.forEach(file => {
+    if (selectedImages.length >= MAX_GALLERY) {
+      console.warn(`⚠️ Max gallery limit (${MAX_GALLERY}) reached, skipping ${file.name}`);
+      return;
+    }
+    const key = getFileKey(file);
+    if (existingKeys.has(key)) {
+      console.warn(`⚠️ Duplicate file, skipping ${file.name}`);
+      return;
+    }
+    selectedImages.push({ file, key });
+    existingKeys.add(key);
+    console.log(`  ✅ Added: ${file.name} (${(file.size / 1024).toFixed(2)}KB)`);
+  });
+
+  console.log(`  Total selected images: ${selectedImages.length}`);
+  galleryInput.value = "";
+  renderGallery();
+  updateGalleryCounter();
+});
+
+videoInput.addEventListener("change", () => {
+  const file = videoInput.files[0];
+  if (!file) {
+    videoMeta.textContent = "";
+    return;
+  }
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+  videoMeta.textContent = `${file.name} · ${sizeMb} MB`;
+});
+
+/* =========================
+   VARIANT HANDLING
+========================= */
+
+function bindImagePreview(input, previewId) {
+  input.addEventListener("change", function() {
+    const preview = document.getElementById(previewId);
+    if (!preview) return;
+    if (this.files[0]) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        preview.innerHTML = `<img src="${e.target.result}" alt="preview"><button type="button" class="remove-img" onclick="this.parentElement.innerHTML=''">✕</button>`;
+      };
+      reader.readAsDataURL(this.files[0]);
+    } else {
+      preview.innerHTML = "";
+    }
+
+    if (this.classList.contains("secondary-image") && this.files && this.files[0]) {
+      const variantEl = this.closest(".variant");
+      const statusEl = variantEl ? variantEl.querySelector(".detect-swatch-status") : null;
+      const detectedHexEl = variantEl ? variantEl.querySelector(".color-panel-detected-hex") : null;
+
+      detectDominantHexFromImageFile(this.files[0]).then((detectedHex) => {
+        if (!detectedHex) return;
+        applyDetectedSwatchToVariant(variantEl, detectedHex, statusEl, detectedHexEl);
+      }).catch((error) => {
+        console.warn("[COLOR PANEL] Secondary swatch auto-detect failed:", error);
+      });
+    }
+  });
+}
+
+function addVariant() {
+  const div = document.createElement("div");
+  div.className = "variant";
+  const variantId = Date.now();
+
+  div.innerHTML = `
+    <input type="text" placeholder="Color Name" class="color" required>
+    <input type="text" placeholder="Type (optional, e.g. warm/cool)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
+    <input type="text" placeholder="Variant Model No" class="variant-model-no" required>
+    <input type="number" placeholder="Stock" class="stock" required>
+    <input type="number" placeholder="Variant Price (optional)" class="price">
+    <input type="number" placeholder="Discount Price (optional)" class="discount">
+    <label class="variant-image-label">
+      <span>Main Image</span>
+      <input type="file" class="main-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="preview-${variantId}"></div>
+    <label class="variant-image-label">
+      <span>Secondary Image (optional)</span>
+      <input type="file" class="secondary-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="secondary-preview-${variantId}"></div>
+    <button type="button" onclick="removeVariant(this)">Remove</button>
+  `;
+
+  const mainImageInput = div.querySelector(".main-image");
+  const secondaryImageInput = div.querySelector(".secondary-image");
+  bindImagePreview(mainImageInput, `preview-${variantId}`);
+  bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
+
+  document.getElementById("variants").appendChild(div);
+}
+
+function removeVariant(button) {
+  button.parentElement.remove();
+}
+
+function colorPanelFieldsMarkup() {
+  return `
+    <div class="color-panel-fields" data-color-panel>
+      <label class="field">
+        <span>Color Panel Type</span>
+        <select class="color-panel-type">
+          <option value="hex" selected>Hex</option>
+          <option value="gradient">Gradient</option>
+          <option value="image">Image</option>
+        </select>
+      </label>
+      <div class="color-panel-input" data-panel="hex">
+        <div class="hex-picker-row">
+          <label class="field compact-field">
+            <span>Hex Value</span>
+            <input type="text" class="color-panel-value-hex" value="#000000" placeholder="#000000">
+          </label>
+          <label class="field compact-field detect-swatch-field">
+            <span>Swatch</span>
+            <button type="button" class="btn-secondary detect-swatch-btn">Detect</button>
+          </label>
+        </div>
+        <p class="meta detect-swatch-status" hidden></p>
+      </div>
+      <div class="color-panel-input" data-panel="gradient">
+        <label class="field">
+          <span>CSS Gradient</span>
+          <input type="text" class="color-panel-value-gradient" placeholder="linear-gradient(...) or radial-gradient(...)" />
+        </label>
+      </div>
+      <div class="color-panel-input" data-panel="image">
+        <div class="color-panel-image-inputs">
+          <label class="variant-image-label">
+            <span>Upload Image</span>
+            <input type="file" class="color-panel-image-file" accept="image/*">
+          </label>
+          <p class="meta color-panel-image-current" hidden></p>
+          <p class="meta color-panel-detected-hex" hidden></p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function rgbToHex(r, g, b) {
+  const clamp = (value) => Math.max(0, Math.min(255, value | 0));
+  const toHex = (value) => clamp(value).toString(16).padStart(2, "0").toUpperCase();
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeHexValue(hex).replace("#", "");
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+}
+
+function rgbToHsl(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    if (max === rn) {
+      h = 60 * (((gn - bn) / delta) % 6);
+    } else if (max === gn) {
+      h = 60 * ((bn - rn) / delta + 2);
+    } else {
+      h = 60 * ((rn - gn) / delta + 4);
+    }
+  }
+
+  if (h < 0) h += 360;
+  return { h, s, l };
+}
+
+function getDepthTone(l) {
+  if (l < 0.22) return "Deep";
+  if (l < 0.42) return "Dark";
+  if (l < 0.62) return "Medium";
+  if (l < 0.82) return "Light";
+  return "Very Light";
+}
+
+function getHueFamily(h, s, l) {
+  if (s < 0.12) {
+    if (l > 0.84) return "Ivory";
+    if (l > 0.68) return "Beige";
+    if (l > 0.5) return "Taupe";
+    if (l > 0.32) return "Gray";
+    return "Black";
+  }
+
+  if (h < 14 || h >= 346) return "Red";
+  if (h < 30) return "Brick";
+  if (h < 45) return "Coral";
+  if (h < 60) return "Orange";
+  if (h < 78) return "Golden";
+  if (h < 102) return "Olive";
+  if (h < 145) return "Green";
+  if (h < 180) return "Teal";
+  if (h < 205) return "Aqua";
+  if (h < 232) return "Blue";
+  if (h < 255) return "Navy";
+  if (h < 278) return "Indigo";
+  if (h < 305) return "Purple";
+  if (h < 332) return "Pink";
+  return "Rose";
+}
+
+function getFinish(s, l) {
+  if (s < 0.12) return "Neutral";
+  if (s < 0.28) return "Soft";
+  if (s < 0.5) return "Natural";
+  if (s < 0.72) return "Rich";
+  return "Bold";
+}
+
+function getColorNameFromHex(hex) {
+  const normalizedHex = normalizeHexValue(hex);
+  const { r, g, b } = hexToRgb(normalizedHex);
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const tone = getDepthTone(l);
+  const family = getHueFamily(h, s, l);
+  const finish = getFinish(s, l);
+  return `${tone} ${family} ${finish}`;
+}
+
+function applyDetectedSwatchToVariant(variantEl, detectedHex, statusEl, detectedHexEl) {
+  if (!variantEl || !detectedHex) {
+    return;
+  }
+
+  const hexInput = variantEl.querySelector(".color-panel-value-hex");
+  const colorInput = variantEl.querySelector(".color");
+  const detectedName = getColorNameFromHex(detectedHex);
+
+  if (hexInput) {
+    hexInput.value = detectedHex;
+  }
+
+  if (colorInput) {
+    colorInput.value = detectedName;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = `Detected from secondary image: ${detectedHex} (${detectedName})`;
+    statusEl.hidden = false;
+  }
+
+  if (detectedHexEl) {
+    detectedHexEl.textContent = `Detected swatch color: ${detectedHex} (${detectedName})`;
+    detectedHexEl.hidden = false;
+  }
+}
+
+function getRgbSaturation(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === 0) return 0;
+  return (max - min) / max;
+}
+
+function getRgbLuminance(r, g, b) {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+async function detectDominantHexFromImageFile(file) {
+  if (!file) {
+    return null;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = objectUrl;
+    });
+
+    const sampleSize = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+    const pixels = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+    const buckets = new Map();
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const a = pixels[i + 3];
+
+      if (a < 40) {
+        continue;
+      }
+
+      const pixelIndex = i / 4;
+      const x = pixelIndex % sampleSize;
+      const y = Math.floor(pixelIndex / sampleSize);
+      const dx = (x - sampleSize / 2) / (sampleSize / 2);
+      const dy = (y - sampleSize / 2) / (sampleSize / 2);
+      const centerWeight = Math.max(0.15, 1 - (dx * dx + dy * dy) * 0.65);
+
+      const sat = getRgbSaturation(r, g, b);
+      const lum = getRgbLuminance(r, g, b);
+
+      // Ignore typical white/gray background pixels so swatch color wins.
+      if ((lum > 235 && sat < 0.15) || (lum > 245 && sat < 0.25)) {
+        continue;
+      }
+
+      const key = `${Math.floor(r / 32)}-${Math.floor(g / 32)}-${Math.floor(b / 32)}`;
+      const bucket = buckets.get(key) || { score: 0, r: 0, g: 0, b: 0 };
+      const score = centerWeight * (0.8 + sat * 1.8);
+
+      bucket.score += score;
+      bucket.r += r * score;
+      bucket.g += g * score;
+      bucket.b += b * score;
+      buckets.set(key, bucket);
+    }
+
+    let winner = null;
+    buckets.forEach((bucket) => {
+      if (!winner || bucket.score > winner.score) {
+        winner = bucket;
+      }
+    });
+
+    if (!winner || winner.score === 0) {
+      return null;
+    }
+
+    return rgbToHex(
+      Math.round(winner.r / winner.score),
+      Math.round(winner.g / winner.score),
+      Math.round(winner.b / winner.score)
+    );
+  } catch (error) {
+    console.warn("[COLOR PANEL] Failed to detect dominant color:", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function normalizeHexValue(value) {
+  if (typeof value !== "string") return "#000000";
+  const trimmed = value.trim().toUpperCase();
+  if (/^#[0-9A-F]{3}$/.test(trimmed)) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`;
+  }
+  if (/^#[0-9A-F]{6}$/.test(trimmed)) {
+    return trimmed;
+  }
+  return "#000000";
+}
+
+function getValidHexOrNull(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toUpperCase();
+  if (/^#[0-9A-F]{3}$/.test(trimmed) || /^#[0-9A-F]{6}$/.test(trimmed)) {
+    return normalizeHexValue(trimmed);
+  }
+  return null;
+}
+
+function setupColorPanelFields(container, initialType = "hex", initialValue = "") {
+  if (!container) return;
+  const select = container.querySelector(".color-panel-type");
+  const hexInput = container.querySelector(".color-panel-value-hex");
+  const detectSwatchBtn = container.querySelector(".detect-swatch-btn");
+  const detectSwatchStatus = container.querySelector(".detect-swatch-status");
+  const gradientInput = container.querySelector(".color-panel-value-gradient");
+  const imageCurrent = container.querySelector(".color-panel-image-current");
+  const imageFileInput = container.querySelector(".color-panel-image-file");
+  const detectedHexEl = container.querySelector(".color-panel-detected-hex");
+
+  const showPanel = (type) => {
+    container.querySelectorAll(".color-panel-input").forEach(panel => {
+      panel.classList.toggle("active", panel.dataset.panel === type);
+    });
+  };
+
+  const typeToSet = initialType || "hex";
+  select.value = typeToSet;
+
+  if (typeToSet === "hex" && hexInput) {
+    const normalized = initialValue ? normalizeHexValue(initialValue) : normalizeHexValue(hexInput.value);
+    hexInput.value = normalized;
+  }
+  if (typeToSet === "gradient" && gradientInput && initialValue) {
+    gradientInput.value = initialValue;
+  }
+  if (typeToSet === "image" && imageCurrent && initialValue) {
+    imageCurrent.textContent = `Current: ${initialValue}`;
+    imageCurrent.hidden = false;
+    container.dataset.initialPanelValue = initialValue;
+  }
+
+  if (hexInput) {
+    hexInput.addEventListener("blur", () => {
+      const normalized = normalizeHexValue(hexInput.value);
+      hexInput.value = normalized;
+    });
+  }
+
+  if (imageFileInput && hexInput) {
+    imageFileInput.addEventListener("change", async () => {
+      if (detectedHexEl) {
+        detectedHexEl.hidden = true;
+      }
+
+      const file = imageFileInput.files && imageFileInput.files[0];
+      if (!file) {
+        return;
+      }
+
+      const detectedHex = await detectDominantHexFromImageFile(file);
+      if (!detectedHex) {
+        return;
+      }
+
+      const variantEl = container.closest(".variant");
+      applyDetectedSwatchToVariant(variantEl, detectedHex, detectSwatchStatus, detectedHexEl);
+    });
+  }
+
+  if (detectSwatchBtn && hexInput) {
+    detectSwatchBtn.addEventListener("click", async () => {
+      const variantEl = container.closest(".variant");
+      const secondaryImageInput = variantEl ? variantEl.querySelector(".secondary-image") : null;
+      const swatchFile = secondaryImageInput && secondaryImageInput.files ? secondaryImageInput.files[0] : null;
+
+      if (detectSwatchStatus) {
+        detectSwatchStatus.hidden = true;
+      }
+
+      if (!swatchFile) {
+        alert("Please upload swatch image in Secondary Image first.");
+        return;
+      }
+
+      detectSwatchBtn.disabled = true;
+      detectSwatchBtn.textContent = "Detecting...";
+
+      try {
+        const detectedHex = await detectDominantHexFromImageFile(swatchFile);
+        if (!detectedHex) {
+          alert("Could not detect swatch color from Secondary Image.");
+          return;
+        }
+
+        const variantEl = container.closest(".variant");
+        applyDetectedSwatchToVariant(variantEl, detectedHex, detectSwatchStatus, detectedHexEl);
+      } finally {
+        detectSwatchBtn.disabled = false;
+        detectSwatchBtn.textContent = "Detect";
+      }
+    });
+  }
+
+  select.addEventListener("change", () => showPanel(select.value));
+  showPanel(select.value);
+}
+
+function collectColorPanelData(variantEl, formData, variantIndex) {
+  const typeSelect = variantEl.querySelector(".color-panel-type");
+  const hexInput = variantEl.querySelector(".color-panel-value-hex");
+  const gradientInput = variantEl.querySelector(".color-panel-value-gradient");
+  const imageFileInput = variantEl.querySelector(".color-panel-image-file");
+
+  let type = typeSelect ? (typeSelect.value || "hex") : "hex";
+  let value = null;
+
+  if (type === "hex" && hexInput) {
+    value = normalizeHexValue(hexInput.value);
+  } else if (type === "gradient" && gradientInput) {
+    value = gradientInput.value.trim() || null;
+  } else if (type === "image") {
+    if (imageFileInput && imageFileInput.files[0]) {
+      formData.append(`color_panel_image_${variantIndex}`, imageFileInput.files[0]);
+      // Send a non-empty placeholder for initial JSON validation.
+      // Actual URL/key will be set by backend after processing the uploaded file.
+      value = `__PENDING_UPLOAD__:${imageFileInput.files[0].name}`;
+    }
+    if ((!value || value === "") && variantEl.dataset.initialPanelValue) {
+      value = variantEl.dataset.initialPanelValue;
+    }
+
+    // Do not send an invalid image panel config without either upload or existing value.
+    if (!value) {
+      console.warn(`[COLOR PANEL] Variant ${variantIndex}: image selected without upload/value; sending null panel config`);
+      type = null;
+    }
+  }
+
+  return {
+    color_panel_type: type || null,
+    color_panel_value: value || null
+  };
+}
+
+/* =========================
+   QUICK ADD VARIANT (PRODUCT LIST)
+========================= */
+
+let quickVariantProductId = null;
+let quickVariantProductName = "";
+
+function openQuickVariant(productId, productName = "Product") {
+  quickVariantProductId = productId;
+  quickVariantProductName = productName;
+
+  const modal = document.getElementById("quickVariantModal");
+  const title = document.getElementById("quickVariantTitle");
+  if (title) {
+    title.textContent = `Add Color · ${productName}`;
+  }
+
+  resetQuickVariantForm();
+
+  if (modal) {
+    modal.classList.add("active");
+    document.body.style.overflow = "hidden";
+    const colorInput = modal.querySelector("#quickColor");
+    if (colorInput) {
+      colorInput.focus();
+    }
+  }
+}
+
+function closeQuickVariantModal() {
+  const modal = document.getElementById("quickVariantModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+  document.body.style.overflow = "";
+  quickVariantProductId = null;
+  quickVariantProductName = "";
+}
+
+function addQuickVariantBlock() {
+  const list = document.getElementById("quickVariantsList");
+  if (!list) return null;
+
+  const uid = `qv-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const variantId = uid;
+
+  const div = document.createElement("div");
+  div.className = "quick-variant variant";
+  div.dataset.uid = uid;
+
+  div.innerHTML = `
+    <button type="button" class="remove-quick" aria-label="Remove" onclick="removeQuickVariant(this)">✕</button>
+    <input type="text" placeholder="Color Name" class="color" required>
+    <input type="text" placeholder="Type (optional)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
+    <input type="text" placeholder="Variant Model No" class="variant-model-no" required>
+    <input type="number" placeholder="Stock" class="stock" required>
+    <input type="number" placeholder="Variant Price (optional)" class="price">
+    <input type="number" placeholder="Discount Price (optional)" class="discount">
+    <label class="variant-image-label">
+      <span>Main Image</span>
+      <input type="file" class="main-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="preview-${variantId}"></div>
+    <label class="variant-image-label">
+      <span>Secondary Image (optional)</span>
+      <input type="file" class="secondary-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="secondary-preview-${variantId}"></div>
+  `;
+
+  const mainImageInput = div.querySelector(".main-image");
+  const secondaryImageInput = div.querySelector(".secondary-image");
+  bindImagePreview(mainImageInput, `preview-${variantId}`);
+  bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
+
+  list.appendChild(div);
+  return div;
+}
+
+function removeQuickVariant(button) {
+  const block = button.closest(".quick-variant");
+  if (!block) return;
+  block.remove();
+
+  const list = document.getElementById("quickVariantsList");
+  if (list && list.querySelectorAll(".quick-variant").length === 0) {
+    addQuickVariantBlock();
+  }
+}
+
+function resetQuickVariantForm() {
+  const form = document.getElementById("quickVariantForm");
+  if (!form) return;
+  form.reset();
+
+  const list = document.getElementById("quickVariantsList");
+  if (list) {
+    list.innerHTML = "";
+    addQuickVariantBlock();
+  }
+}
+
+/* =========================
+   CREATE PRODUCT
+========================= */
+
+document.getElementById("productForm")
+  .addEventListener("submit", async (e) => {
+
+  e.preventDefault();
+
+  const form = e.target;
+  const formData = new FormData(form);
+
+  console.log("📝 PRODUCT FORM SUBMITTED");
+  console.log("  Raw FormData entries:");
+  for (let [key, value] of formData.entries()) {
+    console.log(`    ${key}: ${typeof value === 'object' ? '[File]' : value}`);
+  }
+
+  const wantsBestSeller = bestSellerToggleEl?.checked === true;
+  const tagsResult = buildTagsPayload(tagsInputEl ? tagsInputEl.value : "");
+
+  if (!tagsResult.ok) {
+    alert(tagsResult.message);
+    return;
+  }
+
+  if (tagsResult.tags.length) {
+    formData.set("tags", JSON.stringify(tagsResult.tags));
+  } else {
+    formData.delete("tags");
+  }
+
+  if (wantsBestSeller) {
+    console.log("✓ Best Seller selected, setting subcategory_id to:", BEST_SELLER_SUBCATEGORY_ID);
+    formData.set("subcategory_id", BEST_SELLER_SUBCATEGORY_ID);
+  } else {
+    // If subcategory is not selected, remove it so category_id is used
+    if (!formData.get("subcategory_id")) {
+      console.log("✓ No subcategory selected, using category_id");
+      formData.delete("subcategory_id");
+    }
+  }
+
+  /* ---- Gallery Validation ---- */
+
+  if (selectedImages.length > MAX_GALLERY) {
+    alert(`Maximum ${MAX_GALLERY} gallery images allowed`);
+    return;
+  }
+
+  /* ---- Variant Validation ---- */
+
+  const variantElements = document.querySelectorAll(".variant");
+
+  const variants = [];
+  const submitBtn = form.querySelector(".submitBtn");
+
+  for (let i = 0; i < variantElements.length; i++) {
+    const div = variantElements[i];
+    const color = div.querySelector(".color").value.trim();
+    const variantType = div.querySelector(".variant-type").value.trim();
+    const variantModelNo = div.querySelector(".variant-model-no").value.trim();
+    const stock = div.querySelector(".stock").value;
+    const price = div.querySelector(".price").value;
+    const discount = div.querySelector(".discount").value;
+    const mainImageInput = div.querySelector(".main-image");
+    const secondaryImageInput = div.querySelector(".secondary-image");
+
+    if (!color || !stock || !variantModelNo) {
+      alert("Color name, variant model no, and stock are required");
+      return;
+    }
+
+    const variantData = {
+      color,
+      variant_model_no: variantModelNo,
+      stock: Number(stock),
+      price: price ? Number(price) : null,
+      discount_price: discount ? Number(discount) : null,
+      variantIndex: i
+    };
+
+    if (variantType) {
+      variantData.color_type = variantType;
+    }
+
+    const panelData = collectColorPanelData(div, formData, i);
+    variantData.color_panel_type = panelData.color_panel_type;
+    variantData.color_panel_value = panelData.color_panel_value;
+
+    variants.push(variantData);
+
+    // Add variant main image (color_0, color_1, ...)
+    if (mainImageInput.files[0]) {
+      formData.append(`color_${i}`, mainImageInput.files[0]);
+    }
+
+    // Add variant secondary image (color_secondary_0, color_secondary_1, ...)
+    if (secondaryImageInput.files[0]) {
+      formData.append(`color_secondary_${i}`, secondaryImageInput.files[0]);
+    }
+  }
+
+  setButtonLoading(submitBtn, true, "Creating…");
+
+  /* ---- Validate Required Fields ---- */
+
+  const productName = formData.get("name")?.trim();
+  const basePrice = formData.get("base_price")?.trim();
+  const baseStock = formData.get("base_stock")?.trim();
+  const categoryId = formData.get("category_id")?.trim();
+  const subcategoryId = formData.get("subcategory_id")?.trim();
+
+  console.log("🔍 FORM VALIDATION DEBUG:");
+  console.log("  Product Name:", productName);
+  console.log("  Base Price:", basePrice);
+  console.log("  Category ID:", categoryId);
+  console.log("  Subcategory ID:", subcategoryId);
+  console.log("  Category Checkbox (Best Seller):", document.getElementById("bestSellerToggle")?.checked);
+
+  if (!productName) {
+    console.error("❌ VALIDATION FAILED: Product name is empty");
+    alert("Product name is required");
+    setButtonLoading(submitBtn, false);
+    return;
+  }
+
+  if (!basePrice || isNaN(basePrice) || parseFloat(basePrice) <= 0) {
+    console.error("❌ VALIDATION FAILED: Base price invalid. Value:", basePrice);
+    alert("Base price is required and must be greater than 0");
+    setButtonLoading(submitBtn, false);
+    return;
+  }
+
+  if (baseStock && (isNaN(baseStock) || parseInt(baseStock, 10) < 0)) {
+    console.error("❌ VALIDATION FAILED: Base stock invalid. Value:", baseStock);
+    alert("Base stock must be 0 or greater");
+    setButtonLoading(submitBtn, false);
+    return;
+  }
+
+  if (!categoryId && !subcategoryId) {
+    console.error("❌ VALIDATION FAILED: No category or subcategory selected");
+    console.log("  categorySelect element value:", document.getElementById("categorySelect")?.value);
+    console.log("  subcategorySelect element value:", document.getElementById("subcategorySelect")?.value);
+    alert("Please select a category or subcategory");
+    setButtonLoading(submitBtn, false);
+    return;
+  }
+
+  console.log("✅ VALIDATION PASSED: All required fields present");
+
+  /* ---- Create Product (multipart with files + variants) ---- */
+
+  try {
+    const selectedProvider = getSelectedMediaProvider(mediaProviderEl, "creating the product");
+    if (!selectedProvider) {
+      setButtonLoading(submitBtn, false);
+      return;
+    }
+
+    // Keep provider explicit and send all selected gallery files in the same create request.
+    formData.set("media_provider", selectedProvider);
+    formData.set("base_price", String(parseFloat(basePrice)));
+    if (baseStock) {
+      formData.set("base_stock", String(parseInt(baseStock, 10)));
+    } else {
+      formData.delete("base_stock");
+    }
+    formData.set("variants", JSON.stringify(variants));
+
+    selectedImages.forEach((imageItem) => {
+      formData.append("gallery", imageItem.file);
+    });
+
+    console.log("📤 Sending multipart create request with variant file keys");
+    console.log("  Provider:", selectedProvider);
+    console.log("  Variants:", variants.length);
+    console.log("  Gallery files:", selectedImages.length);
+    console.log("  File keys:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`    - ${key}: ${value.name}`);
+      }
+    }
+
+    const createResponse = await fetchWithAuth(`/products`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!createResponse) {
+      console.error("❌ No response from API");
+      setButtonLoading(submitBtn, false);
+      return;
+    }
+
+    const createResult = await createResponse.json();
+    console.log("📥 API Response Status:", createResponse.status);
+    console.log("📥 API Response:", createResult);
+
+    if (!createResponse.ok) {
+      console.error("❌ API Error:", createResult.message || "Unknown error");
+      alert(createResult.message || "Error creating product");
+      setButtonLoading(submitBtn, false);
+      return;
+    }
+
+    alert("Product Created Successfully");
+
+    console.log("📋 Resetting form and reloading product list...");
+    form.reset();
+    document.getElementById("variants").innerHTML = "";
+    selectedImages.splice(0, selectedImages.length);
+    renderGallery();
+    updateGalleryCounter();
+    videoMeta.textContent = "";
+    // Refresh products after creation
+    allProducts = [];
+    loadProducts();
+
+  } catch (error) {
+    console.error("Create Product Error:", error);
+    alert("Server Error");
+  } finally {
+    setButtonLoading(submitBtn, false);
+  }
+});
+
+/* =========================
+   LOAD PRODUCTS
+========================= */
+
+/* =========================
+   DELETE PRODUCT
+========================= */
+
+async function deleteProduct(id) {
+  if (!confirm("Delete this product?")) return;
+
+  try {
+    await fetchWithAuth(`/products/${id}`, {
+      method: "DELETE"
+    });
+
+    // Refresh products after deletion
+    allProducts = [];
+    loadProducts();
+  } catch (err) {
+    console.error("Delete Error:", err);
+  }
+}
+
+/* =========================
+   EDIT PRODUCT
+========================= */
+
+let editingProductId = null;
+let editSelectedImages = [];
+let deleteMediaIds = [];
+let deleteVariantIds = [];
+let existingVariants = [];
+
+function openEditModal() {
+  document.getElementById("editModal").classList.add("active");
+  document.body.style.overflow = "hidden";
+}
+
+function closeEditModal() {
+  document.getElementById("editModal").classList.remove("active");
+  document.body.style.overflow = "";
+  resetEditForm();
+}
+
+function resetEditForm() {
+  document.getElementById("editProductForm").reset();
+  document.getElementById("editVariants").innerHTML = "";
+  document.getElementById("editCurrentMedia").innerHTML = "";
+  document.getElementById("editGalleryPreview").innerHTML = "";
+  if (customThumbnailUrlInputEl) {
+    customThumbnailUrlInputEl.value = "";
+  }
+  if (customAfterimageUrlInputEl) {
+    customAfterimageUrlInputEl.value = "";
+  }
+  renderThumbnailAfterimageOptions([]);
+  updateThumbnailAfterimagePreviews();
+  setThumbnailAfterimageStatus("Load an existing product to fetch image URLs.");
+  editingProductId = null;
+  editSelectedImages = [];
+  deleteMediaIds = [];
+  deleteVariantIds = [];
+  existingVariants = [];
+  updateEditGalleryCounter();
+}
+
+async function editProduct(slug, productId) {
+  if (!categories.length) {
+    await loadCategories();
+  }
+
+  const editBtn = typeof event !== "undefined" ? event.target : null;
+  const originalText = editBtn ? editBtn.textContent : "";
+  if (editBtn) {
+    editBtn.textContent = "Loading...";
+    editBtn.disabled = true;
+  }
+
+  try {
+    console.log("Fetching product by slug:", slug);
+    const res = await fetchWithAuth(`/products/${productId}-${slug}`);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    
+    const responsePayload = await res.json();
+    console.log("Product data:", responsePayload);
+    const product = responsePayload.product || responsePayload;
+
+    editingProductId = product.id || productId;
+    existingVariants = product.variants || responsePayload.variants || [];
+    const mediaItems = product.media || responsePayload.media || [];
+    deleteMediaIds = [];
+    deleteVariantIds = [];
+    editSelectedImages = [];
+
+    // Populate form fields
+    document.getElementById("editProductId").value = editingProductId;
+    document.getElementById("editName").value = product.name || "";
+    document.getElementById("editDescription").value = product.description || "";
+    document.getElementById("editHowToApply").value = product.how_to_apply || "";
+    document.getElementById("editBenefits").value = product.benefits || "";
+    document.getElementById("editKeyFeatures").value = product.product_description || "";
+    document.getElementById("editIngredients").value = product.ingredients || "";
+    document.getElementById("editModelNo").value = product.product_model_no || "";
+    document.getElementById("editBasePrice").value = product.base_price || "";
+    document.getElementById("editBaseStock").value = product.base_stock || "";
+
+    const rawTags = product.tags || responsePayload.tags;
+    let normalizedTags = "";
+    if (typeof rawTags === "string") {
+      try {
+        const parsed = JSON.parse(rawTags);
+        if (Array.isArray(parsed)) {
+          normalizedTags = JSON.stringify(parsed);
+        }
+      } catch (err) {
+        normalizedTags = rawTags;
+      }
+    } else if (Array.isArray(rawTags)) {
+      normalizedTags = JSON.stringify(rawTags);
+    }
+
+    if (editTagsInputEl) {
+      editTagsInputEl.value = normalizedTags;
+    }
+    if (editBestSellerToggleEl) {
+      editBestSellerToggleEl.checked = String(product.category_id) === BEST_SELLER_SUBCATEGORY_ID;
+    }
+
+    // Populate categories
+    const editCategorySelect = document.getElementById("editCategorySelect");
+    editCategorySelect.innerHTML = "";
+    const resolvedParentCategoryId = product.parent_category_id || findParentCategoryId(product.category_id);
+    categories.forEach(cat => {
+      const option = document.createElement("option");
+      option.value = cat.id;
+      option.textContent = cat.name;
+      if (resolvedParentCategoryId && String(cat.id) === String(resolvedParentCategoryId)) {
+        option.selected = true;
+      }
+      editCategorySelect.appendChild(option);
+    });
+
+    loadEditSubcategories(product.category_id);
+    const editSubSelect = document.getElementById("editSubcategorySelect");
+    if (editSubSelect && product.category_id) {
+      editSubSelect.value = product.category_id;
+    }
+
+    // Render existing media & variants
+    renderEditCurrentMedia(mediaItems);
+    renderEditExistingVariants(existingVariants);
+    await loadEditImageUrls(editingProductId);
+
+    if (editBtn) {
+      editBtn.textContent = originalText;
+      editBtn.disabled = false;
+    }
+
+    openEditModal();
+  } catch (err) {
+    console.error("Edit Product Error:", err);
+    alert("Error loading product details: " + err.message);
+    if (editBtn) {
+      editBtn.textContent = originalText;
+      editBtn.disabled = false;
+    }
+  }
+}
+
+function loadEditSubcategories(selectedId) {
+  const editCategorySelect = document.getElementById("editCategorySelect");
+  const subSelect = document.getElementById("editSubcategorySelect");
+  if (!editCategorySelect || !subSelect) return;
+
+  const categoryId = editCategorySelect.value;
+  subSelect.innerHTML = "";
+
+  if (!categoryId) {
+    subSelect.innerHTML = '<option value="">Select a category first</option>';
+    return;
+  }
+
+  const selected = categories.find(c => String(c.id) === String(categoryId));
+  if (!selected || !Array.isArray(selected.subcategories) || selected.subcategories.length === 0) {
+    subSelect.innerHTML = '<option value="">No subcategories</option>';
+    return;
+  }
+
+  selected.subcategories.forEach(sub => {
+    const option = document.createElement("option");
+    option.value = sub.id;
+    option.textContent = sub.name;
+    if (selectedId && String(sub.id) === String(selectedId)) {
+      option.selected = true;
+    }
+    subSelect.appendChild(option);
+  });
+
+  if (!selectedId) {
+    subSelect.selectedIndex = 0;
+  }
+}
+
+const editCategorySelectEl = document.getElementById("editCategorySelect");
+if (editCategorySelectEl) {
+  editCategorySelectEl.addEventListener("change", () => loadEditSubcategories());
+}
+
+function renderEditCurrentMedia(media) {
+  const container = document.getElementById("editCurrentMedia");
+  container.innerHTML = "";
+
+  if (media.length === 0) {
+    container.innerHTML = '<p class="meta">No media uploaded yet</p>';
+    return;
+  }
+
+  media.forEach(m => {
+    const tile = document.createElement("div");
+    tile.className = "media-tile";
+    tile.dataset.id = m.id;
+
+    tile.innerHTML = `
+      <img src="${m.image_url}" alt="Product media">
+      <button type="button" class="delete-media-btn" onclick="markMediaForDeletion(${m.id}, this)">
+        <span>✕</span>
+      </button>
+    `;
+
+    container.appendChild(tile);
+  });
+}
+
+function markMediaForDeletion(mediaId, button) {
+  const tile = button.closest(".media-tile");
+  
+  if (deleteMediaIds.includes(mediaId)) {
+    deleteMediaIds = deleteMediaIds.filter(id => id !== mediaId);
+    tile.classList.remove("marked-for-deletion");
+    button.innerHTML = "<span>✕</span>";
+  } else {
+    deleteMediaIds.push(mediaId);
+    tile.classList.add("marked-for-deletion");
+    button.innerHTML = "<span>↩</span>";
+  }
+}
+
+function renderEditExistingVariants(variants) {
+  const container = document.getElementById("editVariants");
+  container.innerHTML = "";
+
+  variants.forEach((v, index) => {
+    const div = document.createElement("div");
+    div.className = "variant edit-variant";
+    div.dataset.variantId = v.id;
+    const variantUid = `edit-${v.id}`;
+
+    div.innerHTML = `
+      <input type="hidden" class="variant-db-id" value="${v.id}">
+      <input type="text" placeholder="Color Name" class="color" value="${v.shade || ""}" required>
+      <input type="text" placeholder="Type (warm/cool)" class="variant-type" value="${v.color_type || ""}">
+      ${colorPanelFieldsMarkup()}
+      <input type="text" placeholder="Variant Model No" class="variant-model-no" value="${v.variant_model_no || ""}">
+      <input type="number" placeholder="Stock" class="stock" value="${v.stock || 0}" required>
+      <input type="number" placeholder="Variant Price" class="price" value="${v.price || ""}">
+      <input type="number" placeholder="Discount Price" class="discount" value="${v.discount_price || ""}">
+      
+      <div class="variant-current-images">
+        ${v.main_image ? `<div class="current-img"><img src="${v.main_image}" alt="Main"><span>Current Main</span></div>` : ""}
+        ${v.secondary_image ? `<div class="current-img"><img src="${v.secondary_image}" alt="Secondary"><span>Current Secondary</span></div>` : ""}
+      </div>
+      
+      <label class="variant-image-label">
+        <span>Replace Main Image</span>
+        <input type="file" class="main-image" accept="image/*" data-variant-id="${variantUid}">
+      </label>
+      <div class="variant-image-preview" id="preview-${variantUid}"></div>
+      
+      <label class="variant-image-label">
+        <span>Replace Secondary Image</span>
+        <input type="file" class="secondary-image" accept="image/*" data-variant-id="${variantUid}">
+      </label>
+      <div class="variant-image-preview" id="secondary-preview-${variantUid}"></div>
+      
+      <button type="button" class="delete-variant-btn" onclick="markVariantForDeletion(${v.id}, this)">Delete Variant</button>
+    `;
+
+    const mainImageInput = div.querySelector(".main-image");
+    const secondaryImageInput = div.querySelector(".secondary-image");
+    bindImagePreview(mainImageInput, `preview-${variantUid}`);
+    bindImagePreview(secondaryImageInput, `secondary-preview-${variantUid}`);
+    setupColorPanelFields(div.querySelector("[data-color-panel]"), v.color_panel_type || "hex", v.color_panel_value || "");
+
+    container.appendChild(div);
+  });
+}
+
+function markVariantForDeletion(variantId, button) {
+  const variantDiv = button.closest(".variant");
+  
+  if (deleteVariantIds.includes(variantId)) {
+    deleteVariantIds = deleteVariantIds.filter(id => id !== variantId);
+    variantDiv.classList.remove("marked-for-deletion");
+    button.textContent = "Delete Variant";
+  } else {
+    deleteVariantIds.push(variantId);
+    variantDiv.classList.add("marked-for-deletion");
+    button.textContent = "Undo Delete";
+  }
+}
+
+function addEditVariant() {
+  const div = document.createElement("div");
+  div.className = "variant new-variant";
+  const variantId = `new-${Date.now()}`;
+
+  div.innerHTML = `
+    <span class="new-variant-badge">NEW</span>
+    <input type="text" placeholder="Color Name" class="color" required>
+    <input type="text" placeholder="Type (warm/cool)" class="variant-type">
+    ${colorPanelFieldsMarkup()}
+    <input type="text" placeholder="Variant Model No" class="variant-model-no">
+    <input type="number" placeholder="Stock" class="stock" required>
+    <input type="number" placeholder="Variant Price" class="price">
+    <input type="number" placeholder="Discount Price" class="discount">
+    <label class="variant-image-label">
+      <span>Main Image</span>
+      <input type="file" class="main-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="preview-${variantId}"></div>
+    <label class="variant-image-label">
+      <span>Secondary Image</span>
+      <input type="file" class="secondary-image" accept="image/*" data-variant-id="${variantId}">
+    </label>
+    <div class="variant-image-preview" id="secondary-preview-${variantId}"></div>
+    <button type="button" onclick="this.parentElement.remove()">Remove</button>
+  `;
+
+  const mainImageInput = div.querySelector(".main-image");
+  const secondaryImageInput = div.querySelector(".secondary-image");
+  bindImagePreview(mainImageInput, `preview-${variantId}`);
+  bindImagePreview(secondaryImageInput, `secondary-preview-${variantId}`);
+  setupColorPanelFields(div.querySelector("[data-color-panel]"));
+
+  document.getElementById("editVariants").appendChild(div);
+}
+
+// Edit gallery handling
+const editGalleryInput = document.getElementById("editGalleryInput");
+const editGalleryPreview = document.getElementById("editGalleryPreview");
+
+function updateEditGalleryCounter() {
+  const counter = document.getElementById("editGalleryCounter");
+  if (counter) {
+    counter.textContent = `${editSelectedImages.length} selected`;
+  }
+}
+
+function renderEditGalleryPreview() {
+  editGalleryPreview.innerHTML = "";
+
+  editSelectedImages.forEach((item, index) => {
+    const tile = document.createElement("div");
+    tile.className = "preview-tile";
+
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(item.file);
+    img.src = url;
+    img.onload = () => URL.revokeObjectURL(url);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      editSelectedImages.splice(index, 1);
+      renderEditGalleryPreview();
+      updateEditGalleryCounter();
+    });
+
+    tile.appendChild(img);
+    tile.appendChild(removeBtn);
+    editGalleryPreview.appendChild(tile);
+  });
+}
+
+editGalleryInput.addEventListener("change", () => {
+  const files = Array.from(editGalleryInput.files || []);
+  const existingKeys = new Set(editSelectedImages.map(item => item.key));
+
+  files.forEach(file => {
+    const key = getFileKey(file);
+    if (!existingKeys.has(key)) {
+      editSelectedImages.push({ file, key });
+      existingKeys.add(key);
+    }
+  });
+
+  editGalleryInput.value = "";
+  renderEditGalleryPreview();
+  updateEditGalleryCounter();
+});
+
+// Edit form submission
+document.getElementById("editProductForm")
+  .addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData();
+    const saveBtn = document.querySelector("#editProductForm .btn-primary");
+    setButtonLoading(saveBtn, true, "Saving…");
+    
+    // Add basic fields
+    formData.append("name", document.getElementById("editName").value);
+    formData.append("description", document.getElementById("editDescription").value);
+    formData.append("how_to_apply", document.getElementById("editHowToApply").value);
+    formData.append("benefits", document.getElementById("editBenefits").value);
+    formData.append("product_description", document.getElementById("editKeyFeatures").value);
+    formData.append("ingredients", document.getElementById("editIngredients").value);
+    formData.append("product_model_no", document.getElementById("editModelNo").value);
+    formData.append("base_price", document.getElementById("editBasePrice").value);
+    formData.append("base_stock", document.getElementById("editBaseStock").value);
+    const selectedEditProvider = getSelectedMediaProvider(editMediaProviderEl, "saving product updates");
+    if (!selectedEditProvider) {
+      setButtonLoading(saveBtn, false);
+      return;
+    }
+
+    formData.append("media_provider", selectedEditProvider);
+
+    const wantsBestSellerEdit = editBestSellerToggleEl?.checked === true;
+    const editTagsRaw = editTagsInputEl ? editTagsInputEl.value : "";
+    const editTagsResult = buildTagsPayload(editTagsRaw);
+
+    if (!editTagsResult.ok) {
+      alert(editTagsResult.message);
+      setButtonLoading(saveBtn, false);
+      return;
+    }
+
+    const editSubcategoryId = wantsBestSellerEdit
+      ? BEST_SELLER_SUBCATEGORY_ID
+      : document.getElementById("editSubcategorySelect").value;
+
+    if (editSubcategoryId) {
+      formData.append("subcategory_id", editSubcategoryId);
+    }
+
+    if (editTagsResult.tags.length) {
+      formData.append("tags", JSON.stringify(editTagsResult.tags));
+    }
+
+    // Add media deletion IDs
+    if (deleteMediaIds.length > 0) {
+      formData.append("delete_media_ids", JSON.stringify(deleteMediaIds));
+    }
+
+    // Add variant deletion IDs
+    if (deleteVariantIds.length > 0) {
+      formData.append("delete_variant_ids", JSON.stringify(deleteVariantIds));
+    }
+
+    // Add new gallery images
+    editSelectedImages.forEach(item => {
+      formData.append("gallery", item.file);
+    });
+
+    // Collect variants
+    const variantElements = document.querySelectorAll("#editVariants .variant:not(.marked-for-deletion)");
+    const variants = [];
+    let variantIndex = 0;
+
+    variantElements.forEach((div) => {
+      const dbId = div.querySelector(".variant-db-id");
+      const color = div.querySelector(".color").value.trim();
+      const variantType = div.querySelector(".variant-type").value.trim();
+      const variantModelNo = div.querySelector(".variant-model-no").value.trim();
+      const stock = div.querySelector(".stock").value;
+      const price = div.querySelector(".price").value;
+      const discount = div.querySelector(".discount").value;
+      const mainImageInput = div.querySelector(".main-image");
+      const secondaryImageInput = div.querySelector(".secondary-image");
+
+      if (!color) return;
+
+      const variantData = {
+        color,
+        stock: Number(stock) || 0,
+        variant_model_no: variantModelNo || null,
+        price: price ? Number(price) : null,
+        discount_price: discount ? Number(discount) : null,
+        color_type: variantType || null
+      };
+
+      const panelData = collectColorPanelData(div, formData, variantIndex);
+      variantData.color_panel_type = panelData.color_panel_type;
+      variantData.color_panel_value = panelData.color_panel_value;
+
+      console.log(`[EDIT PRODUCT] Variant ${variantIndex} panel:`, {
+        type: variantData.color_panel_type,
+        value: variantData.color_panel_value,
+        hasNewPanelUpload: !!(div.querySelector(".color-panel-image-file")?.files?.[0])
+      });
+
+      // Include ID for existing variants
+      if (dbId) {
+        variantData.id = Number(dbId.value);
+      }
+
+      variants.push(variantData);
+
+      // Add variant images
+      if (mainImageInput && mainImageInput.files[0]) {
+        formData.append(`color_${variantIndex}`, mainImageInput.files[0]);
+      }
+      if (secondaryImageInput && secondaryImageInput.files[0]) {
+        formData.append(`color_secondary_${variantIndex}`, secondaryImageInput.files[0]);
+      }
+
+      variantIndex++;
+    });
+
+    formData.append("variants", JSON.stringify(variants));
+
+    console.log("[EDIT PRODUCT] FormData file keys:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  - ${key}: ${value.name}`);
+      }
+    }
+
+    try {
+      // Send all product data + files in one multipart request.
+      console.log("[EDIT PRODUCT] Sending multipart PUT with variants and files");
+      console.log("[EDIT PRODUCT] Variants payload:", variants);
+
+      const response = await fetchWithAuth(
+        `/products/${editingProductId}`,
+        {
+          method: "PUT",
+          body: formData
+        }
+      );
+
+      if (!response) {
+        setButtonLoading(saveBtn, false);
+        return;
+      }
+
+      const result = await response.json();
+      console.log("[EDIT PRODUCT] Response:", response.status, result);
+
+      if (!response.ok) {
+        alert(`${result.message || "Error updating product"}${result.details ? `\n\nDetails: ${result.details}` : ""}`);
+        setButtonLoading(saveBtn, false);
+        return;
+      }
+
+      alert("Product Updated Successfully");
+      closeEditModal();
+      // Refresh products after update
+      allProducts = [];
+      loadProducts();
+
+    } catch (error) {
+      console.error("Update Product Error:", error);
+      alert("Server Error");
+    } finally {
+      setButtonLoading(saveBtn, false);
+    }
+  });
+
+// Quick add variant form (from product list)
+const quickVariantForm = document.getElementById("quickVariantForm");
+if (quickVariantForm) {
+  const addMoreBtn = document.getElementById("quickAddVariantBtn");
+  if (addMoreBtn) {
+    addMoreBtn.addEventListener("click", () => {
+      const block = addQuickVariantBlock();
+      if (block) {
+        block.scrollIntoView({ behavior: "smooth", block: "center" });
+        const colorInput = block.querySelector(".color");
+        if (colorInput) colorInput.focus();
+      }
+    });
+  }
+
+  quickVariantForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!quickVariantProductId) {
+      alert("Select a product to add a color");
+      return;
+    }
+
+    console.log("[QUICK VARIANT] === FORM SUBMISSION START ===");
+
+    const formData = new FormData();
+    const blocks = quickVariantForm.querySelectorAll("#quickVariantsList .quick-variant");
+    if (!blocks.length) {
+      alert("Add at least one color variant");
+      return;
+    }
+
+    const variantsPayload = [];
+    let variantIndex = 0;
+
+    console.log(`[QUICK VARIANT] Processing ${blocks.length} variant block(s)`);
+
+    for (const block of blocks) {
+      const color = block.querySelector(".color")?.value.trim();
+      const variantType = block.querySelector(".variant-type")?.value.trim();
+      const variantModelNo = block.querySelector(".variant-model-no")?.value.trim();
+      const stock = block.querySelector(".stock")?.value;
+      const price = block.querySelector(".price")?.value;
+      const discount = block.querySelector(".discount")?.value;
+      const mainImageInput = block.querySelector(".main-image");
+      const secondaryImageInput = block.querySelector(".secondary-image");
+
+      console.log(`[QUICK VARIANT] Variant ${variantIndex}: ${color} (${variantModelNo})`);
+
+      if (!color || !variantModelNo || !stock) {
+        alert("Color name, model no, and stock are required for each variant");
+        return;
+      }
+
+      const variantData = {
+        color,
+        variant_model_no: variantModelNo,
+        stock: Number(stock),
+        price: price ? Number(price) : null,
+        discount_price: discount ? Number(discount) : null,
+        color_type: variantType || null
+      };
+
+      const panelData = collectColorPanelData(block, formData, variantIndex);
+      variantData.color_panel_type = panelData.color_panel_type;
+      variantData.color_panel_value = panelData.color_panel_value;
+
+      console.log(`[QUICK VARIANT]   Panel - Type: ${panelData.color_panel_type}, Value: ${panelData.color_panel_value}`);
+
+      if (mainImageInput && mainImageInput.files[0]) {
+        console.log(`[QUICK VARIANT]   Main image: ${mainImageInput.files[0].name} (${(mainImageInput.files[0].size / 1024).toFixed(2)}KB)`);
+        formData.append(`color_${variantIndex}`, mainImageInput.files[0]);
+      } else {
+        console.log(`[QUICK VARIANT]   Main image: NONE`);
+      }
+
+      if (secondaryImageInput && secondaryImageInput.files[0]) {
+        console.log(`[QUICK VARIANT]   Secondary image: ${secondaryImageInput.files[0].name} (${(secondaryImageInput.files[0].size / 1024).toFixed(2)}KB)`);
+        formData.append(`color_secondary_${variantIndex}`, secondaryImageInput.files[0]);
+      } else {
+        console.log(`[QUICK VARIANT]   Secondary image: NONE`);
+      }
+
+      variantsPayload.push(variantData);
+      variantIndex += 1;
+    }
+
+    console.log(`[QUICK VARIANT] Variants payload:`, JSON.stringify(variantsPayload, null, 2));
+    
+    // IMPORTANT: Use FormData for the entire request so files are included
+    const selectedQuickProvider = getSelectedMediaProvider(quickMediaProviderEl, "adding color variants");
+    if (!selectedQuickProvider) {
+      return;
+    }
+
+    formData.append("media_provider", selectedQuickProvider);
+    formData.append("variants", JSON.stringify(variantsPayload));
+    
+    console.log("[QUICK VARIANT] FormData contents:");
+    for (let [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  - ${key}: File(${value.name}, ${(value.size / 1024).toFixed(2)}KB)`);
+      } else {
+        console.log(`  - ${key}: ${typeof value === 'string' ? value.substring(0, 100) : value}`);
+      }
+    }
+
+    const submitBtn = quickVariantForm.querySelector(".btn-primary");
+    setButtonLoading(submitBtn, true, "Adding…");
+
+    try {
+      // Submit all data including variant images and color panel images as FormData
+      console.log(`[QUICK VARIANT] Sending PUT /products/${quickVariantProductId}`);
+      console.log(`[QUICK VARIANT] Method: PUT, Content-Type: FormData`);
+
+      const response = await fetchWithAuth(
+        `/products/${quickVariantProductId}`,
+        {
+          method: "PUT",
+          body: formData
+        }
+      );
+
+      if (!response) {
+        setButtonLoading(submitBtn, false);
+        return;
+      }
+
+      console.log(`[QUICK VARIANT] Response Status: ${response.status}`);
+
+      const result = await response.json();
+      console.log(`[QUICK VARIANT] Response Body:`, result);
+
+      if (!response.ok) {
+        console.error(`[QUICK VARIANT] ❌ Server Error [${response.status}]:`);
+        console.error(`  Message: ${result.message}`);
+        console.error(`  Details: ${result.details || 'N/A'}`);
+        console.error(`  Full Response:`, result);
+        alert(`Error: ${result.message || "Error adding color variant"}\n\nDetails: ${result.details || ''}`);
+        setButtonLoading(submitBtn, false);
+        return;
+      }
+
+      console.log(`[QUICK VARIANT] ✅ Response Summary:`, {
+        status: response.status,
+        message: result.message,
+        productId: result.productId,
+        variantsAdded: result.variantsAdded
+      });
+      alert("Color variant added");
+      closeQuickVariantModal();
+      // Refresh products after adding variant
+      allProducts = [];
+      loadProducts();
+
+    } catch (error) {
+      console.error("Quick Variant Error:", error);
+      alert("Server Error");
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+}
+
+/* =========================
+   MEDIA PROVIDER SETTINGS
+========================= */
+
+async function fetchMediaProviderSettings() {
+  try {
+    const response = await fetchWithAuth('/settings/media-provider');
+
+    if (response && response.ok) {
+      const data = await response.json();
+      availableProviders = Array.isArray(data.availableProviders)
+        ? data.availableProviders
+        : ['cloudinary', 'aws_s3'];
+      renderMediaProviderOptions(availableProviders);
+      console.log('📡 Media Provider Settings loaded:', {
+        available: availableProviders
+      });
+    }
+  } catch (error) {
+    console.warn('⚠️  Failed to fetch media provider, using default:', error.message);
+    // Continue with default initialized at top of file
+  }
+}
+
+/* =========================
+   INIT
+========================= */
+
+// Expose functions globally for inline onclick handlers
+window.addVariant = addVariant;
+window.removeVariant = removeVariant;
+window.deleteProduct = deleteProduct;
+window.editProduct = editProduct;
+window.closeEditModal = closeEditModal;
+window.addEditVariant = addEditVariant;
+window.markMediaForDeletion = markMediaForDeletion;
+window.markVariantForDeletion = markVariantForDeletion;
+window.openQuickVariant = openQuickVariant;
+window.closeQuickVariantModal = closeQuickVariantModal;
+window.addQuickVariantBlock = addQuickVariantBlock;
+window.removeQuickVariant = removeQuickVariant;
+
+if (refreshImageUrlsBtnEl) {
+  refreshImageUrlsBtnEl.addEventListener("click", () => {
+    if (!editingProductId) {
+      alert("Open an existing product first.");
+      return;
+    }
+    loadEditImageUrls(editingProductId);
+  });
+}
+
+if (saveThumbnailAfterimageBtnEl) {
+  saveThumbnailAfterimageBtnEl.addEventListener("click", saveThumbnailAfterimage);
+}
+
+if (editThumbnailUrlSelectEl) {
+  editThumbnailUrlSelectEl.addEventListener("change", updateThumbnailAfterimagePreviews);
+}
+
+if (editAfterimageUrlSelectEl) {
+  editAfterimageUrlSelectEl.addEventListener("change", updateThumbnailAfterimagePreviews);
+}
+
+if (customThumbnailUrlInputEl) {
+  customThumbnailUrlInputEl.addEventListener("input", updateThumbnailAfterimagePreviews);
+}
+
+if (customAfterimageUrlInputEl) {
+  customAfterimageUrlInputEl.addEventListener("input", updateThumbnailAfterimagePreviews);
+}
+
+if (applyBulkCreateVariantsBtnEl) {
+  applyBulkCreateVariantsBtnEl.addEventListener("click", applyCreateBulkVariantValues);
+}
+
+if (applyBulkEditVariantsBtnEl) {
+  applyBulkEditVariantsBtnEl.addEventListener("click", applyEditBulkVariantValues);
+}
+
+// Product search event listeners
+const productSearchInput = document.getElementById('productSearchInput');
+const clearProductSearchBtn = document.getElementById('clearProductSearch');
+
+if (productSearchInput) {
+  productSearchInput.addEventListener('input', debounce(() => {
+    filterProducts();
+    renderProductsPage();
+  }, 300));
+  
+  productSearchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      filterProducts();
+      renderProductsPage();
+    }
+  });
+}
+
+if (clearProductSearchBtn) {
+  clearProductSearchBtn.addEventListener('click', () => {
+    if (productSearchInput) {
+      productSearchInput.value = '';
+      filterProducts();
+      renderProductsPage();
+      productSearchInput.focus();
+    }
+  });
+}
+
+// Debounce utility function
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Load initial data
+fetchMediaProviderSettings();  // Load media provider before any uploads
+loadCategories();
+loadProducts();
+updateGalleryCounter();
+
+// Add first variant block by default
+addVariant();
+

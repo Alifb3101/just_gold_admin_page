@@ -1,0 +1,193 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Queries - Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="orders.css">
+</head>
+<body>
+
+<!-- Role-based Navigation -->
+<nav class="admin-nav" id="adminNav">
+  <div class="nav-brand">
+    <span class="nav-logo">👑</span>
+    <span>Just Gold Admin</span>
+  </div>
+  <div class="nav-menu" id="navMenu"></div>
+  <div class="nav-user">
+    <span id="userRoleBadge" class="user-role"></span>
+    <span id="userName"></span>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">ADMIN</p>
+      <h1>Contact Queries</h1>
+      <p class="subtitle">View and manage customer contact messages and inquiries.</p>
+    </div>
+    <div class="hero-actions">
+      <a href="index.html" class="nav-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Products
+      </a>
+      <a href="orders.html" class="nav-btn" data-role="admin,order_manager,viewer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        Orders
+      </a>
+      <a href="users.html" class="nav-btn" data-role="admin">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Users
+      </a>
+      <div class="hero-chip">
+        <span>Contact Management</span>
+        <strong id="queryCount">Loading...</strong>
+      </div>
+    </div>
+  </header>
+
+  <main class="orders-layout">
+    <!-- Filters Section -->
+    <section class="filters-panel panel">
+      <h2>Filters</h2>
+      
+      <label class="field">
+        <span>Search</span>
+        <input type="text" id="searchInput" placeholder="Name, email, subject...">
+      </label>
+
+      <label class="field">
+        <span>Status</span>
+        <select id="statusFilter">
+          <option value="">All Statuses</option>
+          <option value="new">New</option>
+          <option value="read">Read</option>
+          <option value="replied">Replied</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Date From</span>
+        <input type="date" id="dateFrom">
+      </label>
+
+      <label class="field">
+        <span>Date To</span>
+        <input type="date" id="dateTo">
+      </label>
+
+      <button type="button" class="btn btn-primary" id="applyFilters">Apply Filters</button>
+      <button type="button" class="btn btn-secondary" id="clearFilters">Clear</button>
+    </section>
+
+    <!-- Queries List -->
+    <section class="orders-panel panel">
+      <div class="section-head">
+        <h2>Recent Queries</h2>
+        <div class="pagination-info">
+          <span id="paginationInfo">Page 1</span>
+        </div>
+      </div>
+
+      <div class="orders-table-wrapper">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Subject</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queriesTableBody">
+            <tr>
+              <td colspan="6" class="loading-cell">Loading queries...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <button type="button" class="btn btn-secondary" id="prevPage" disabled>Previous</button>
+        <span id="pageNumbers"></span>
+        <button type="button" class="btn btn-secondary" id="nextPage">Next</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Query Detail Modal -->
+<div class="modal-overlay" id="queryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalQueryTitle">Query Details</h2>
+      <button type="button" class="close-btn" id="closeModal">&times;</button>
+    </div>
+    <div class="modal-body" id="queryDetailContent">
+      Loading...
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-danger" id="deleteQueryBtn">Delete</button>
+      <button type="button" class="btn btn-secondary" id="closeModalBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="auth-config.js"></script>
+<script>
+  // Protect route - admin and viewer can access contact queries
+  protectRoute('admin');
+  
+  // Initialize RBAC on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initialize role-based access control
+    initRBAC();
+    
+    // Render navigation menu based on role
+    renderMenu('navMenu');
+    
+    // Display user info
+    const user = getAdminUser();
+    if (user) {
+      const roleInfo = getRoleInfo(user.role);
+      const roleBadge = document.getElementById('userRoleBadge');
+      if (roleBadge) {
+        roleBadge.textContent = roleInfo.label;
+        roleBadge.style.background = roleInfo.color + '20';
+        roleBadge.style.color = roleInfo.color;
+      }
+      
+      const userName = document.getElementById('userName');
+      if (userName) {
+        userName.textContent = user.email;
+      }
+    }
+    
+    // Hide delete button for viewers (read-only access)
+    const deleteBtn = document.getElementById('deleteQueryBtn');
+    if (deleteBtn && !hasPermission('contact_queries:manage')) {
+      deleteBtn.style.display = 'none';
+    }
+  });
+</script>
+<script src="contact-queries.js"></script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Denied - Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: linear-gradient(135deg, #f6f2e9 0%, #efe7db 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .unauthorized-container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(35, 24, 16, 0.15);
+      width: 100%;
+      max-width: 500px;
+      padding: 60px 40px;
+      text-align: center;
+    }
+
+    .icon {
+      width: 100px;
+      height: 100px;
+      background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 30px;
+      font-size: 50px;
+    }
+
+    .icon span {
+      filter: grayscale(100%) brightness(2);
+    }
+
+    h1 {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 28px;
+      color: #1f1c18;
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: #6f665b;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .role-info {
+      background: #f9f7f4;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .role-info h3 {
+      font-size: 14px;
+      color: #6f665b;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .role-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .role-badge.admin {
+      background: #fce4e1;
+      color: #c0392b;
+    }
+
+    .role-badge.inventory_manager {
+      background: #e8f8f5;
+      color: #27ae60;
+    }
+
+    .role-badge.order_manager {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .role-badge.viewer {
+      background: #f5f5f5;
+      color: #757575;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #c7772c 0%, #a0520f 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(199, 119, 44, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(199, 119, 44, 0.4);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #6f665b;
+      border: 1px solid rgba(31, 28, 24, 0.12);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(31, 28, 24, 0.05);
+    }
+
+    .logout-btn {
+      background: transparent;
+      color: #e74c3c;
+      border: 1px solid #e74c3c;
+    }
+
+    .logout-btn:hover {
+      background: #fce4e1;
+    }
+
+    .permissions-list {
+      text-align: left;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid rgba(31, 28, 24, 0.1);
+    }
+
+    .permissions-list h4 {
+      font-size: 14px;
+      color: #6f665b;
+      margin-bottom: 12px;
+    }
+
+    .permissions-list ul {
+      list-style: none;
+      font-size: 14px;
+      color: #6f665b;
+    }
+
+    .permissions-list li {
+      padding: 6px 0;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .permissions-list li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #27ae60;
+      font-weight: bold;
+    }
+
+    @media (max-width: 480px) {
+      .unauthorized-container {
+        padding: 40px 24px;
+        margin: 20px;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="unauthorized-container">
+  <div class="icon">
+    <span>🔒</span>
+  </div>
+
+  <h1>Access Denied</h1>
+  <p>You don't have permission to access this page. Please contact your administrator if you believe this is an error.</p>
+
+  <div class="role-info">
+    <h3>Your Current Role</h3>
+    <span id="userRole" class="role-badge">Loading...</span>
+  </div>
+
+  <div id="permissionsSection" class="permissions-list" style="display: none;">
+    <h4>You can access:</h4>
+    <ul id="permissionsList"></ul>
+  </div>
+
+  <div class="actions">
+    <a href="index.html" class="btn btn-primary">
+      <span>←</span> Go to Dashboard
+    </a>
+    <button class="btn btn-secondary" onclick="history.back()">
+      Go Back
+    </button>
+    <button class="btn logout-btn" onclick="logout()">
+      Logout
+    </button>
+  </div>
+</div>
+
+<script src="auth-config.js"></script>
+<script>
+  // Check authentication
+  if (!isAuthenticated()) {
+    window.location.href = '/login.html';
+  }
+
+  // Display user's role
+  const user = getAdminUser();
+  const roleInfo = getRoleInfo(user?.role);
+  
+  const roleBadge = document.getElementById('userRole');
+  roleBadge.textContent = roleInfo.label;
+  roleBadge.className = `role-badge ${user?.role || 'viewer'}`;
+
+  // Display permissions
+  const permissionsSection = document.getElementById('permissionsSection');
+  const permissionsList = document.getElementById('permissionsList');
+  
+  if (roleInfo.permissions && roleInfo.permissions.length > 0) {
+    permissionsSection.style.display = 'block';
+    
+    const moduleAccess = {
+      'dashboard': 'Dashboard',
+      'products': 'Products',
+      'orders': 'Orders',
+      'inventory': 'Inventory',
+      'users': 'User Management',
+      'settings': 'Settings',
+      'contact_queries': 'Contact Queries'
+    };
+    
+    // Get unique modules user can access
+    const accessibleModules = new Set();
+    roleInfo.permissions.forEach(perm => {
+      if (perm === '*') {
+        Object.values(moduleAccess).forEach(m => accessibleModules.add(m));
+      } else {
+        const module = perm.split(':')[0];
+        if (moduleAccess[module]) {
+          accessibleModules.add(moduleAccess[module]);
+        }
+      }
+    });
+    
+    permissionsList.innerHTML = Array.from(accessibleModules)
+      .map(module => `<li>${module}</li>`)
+      .join('');
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Management - Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Inventory specific styles */
+    .inventory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .inventory-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #fff8ef 0%, #f6ddbf 100%);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .stat-card.low-stock {
+      background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+      border-color: #f44336;
+    }
+
+    .stat-card h3 {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0 0 8px 0;
+      font-weight: 500;
+    }
+
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0;
+    }
+
+    .stat-card.low-stock .value {
+      color: #d32f2f;
+    }
+
+    .inventory-toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .inventory-search {
+      flex: 1;
+      min-width: 280px;
+      position: relative;
+    }
+
+    .inventory-search input {
+      width: 100%;
+      padding: 12px 16px 12px 44px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: #fff;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .inventory-search input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(199, 119, 44, 0.1);
+    }
+
+    .inventory-search::before {
+      content: "🔍";
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.1rem;
+    }
+
+    .inventory-table-wrapper {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .inventory-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .inventory-table thead {
+      background: linear-gradient(120deg, #fff1d2 0%, #f6ddbf 100%);
+    }
+
+    .inventory-table th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--accent-dark);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .inventory-table td {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .inventory-table tbody tr:hover {
+      background: #fffaf4;
+    }
+
+    .inventory-table tbody tr.low-stock {
+      background: #fff5f5;
+    }
+
+    .inventory-table tbody tr.low-stock:hover {
+      background: #ffebee;
+    }
+
+    .product-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .product-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #f5f5f5;
+    }
+
+    .product-details h4 {
+      margin: 0 0 4px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .product-details .category {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .variant-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .variant-badge::before {
+      content: "◐";
+    }
+
+    .price-display {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .current-price {
+      font-weight: 600;
+      color: var(--ink);
+      font-size: 1rem;
+    }
+
+    .price-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .discount-price {
+      color: #4caf50;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .discount-badge {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .no-discount {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .stock-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .stock-input, .price-input {
+      width: 90px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      text-align: center;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .stock-input.edit-input, .price-input.edit-input {
+      display: none;
+    }
+
+    .stock-input.edit-input.visible, .price-input.edit-input.visible {
+      display: block;
+    }
+
+    .stock-input:focus, .price-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(199, 119, 44, 0.1);
+    }
+
+    .stock-input.low {
+      border-color: #f44336;
+      background: #ffebee;
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .btn-icon.save.edit-save-btn,
+    .btn-icon.cancel.edit-cancel-btn {
+      display: none;
+    }
+
+    .btn-icon.edit-save-btn {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn-icon.edit-save-btn:hover {
+      background: #388e3c;
+    }
+
+    .btn-icon.cancel.edit-cancel-btn {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .btn-icon.cancel.edit-cancel-btn:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-icon.edit {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .btn-icon.edit:hover {
+      background: #bbdefb;
+    }
+
+    .expand-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+      padding: 4px;
+    }
+
+    .expand-btn.expanded {
+      transform: rotate(90deg);
+    }
+
+    .variants-row {
+      background: #fafafa;
+    }
+
+    .variants-row td {
+      padding: 0;
+    }
+
+    .variants-container {
+      padding: 16px;
+    }
+
+    .variant-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .variant-item:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(199, 119, 44, 0.1);
+    }
+
+    .variant-item.low-stock {
+      background: #fff5f5;
+      border-color: #ffcdd2;
+    }
+
+    .variant-thumb {
+      width: 56px;
+      height: 56px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #f5f5f5;
+      flex-shrink: 0;
+    }
+
+    .variant-info {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .variant-info h5 {
+      margin: 0 0 4px 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .variant-info .model {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .variant-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .variant-actions label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .operation-select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+
+    .low-stock-banner {
+      background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+      border: 1px solid #f44336;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .low-stock-banner .icon {
+      font-size: 1.5rem;
+    }
+
+    .low-stock-banner h3 {
+      margin: 0 0 4px 0;
+      font-size: 1rem;
+      color: #d32f2f;
+    }
+
+    .low-stock-banner p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #c62828;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge-warning {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .badge-danger {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    @media (max-width: 1024px) {
+      .inventory-table th,
+      .inventory-table td {
+        padding: 10px 12px;
+      }
+
+      .stock-input, .price-input {
+        width: 70px;
+        padding: 6px 8px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .inventory-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .inventory-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .inventory-table-wrapper {
+        overflow-x: auto;
+      }
+
+      .variant-item {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Role-based Navigation -->
+<nav class="admin-nav" id="adminNav">
+  <div class="nav-brand">
+    <span class="nav-logo">👑</span>
+    <span>Just Gold Admin</span>
+  </div>
+  <div class="nav-menu" id="navMenu"></div>
+  <div class="nav-user">
+    <span id="userRoleBadge" class="user-role"></span>
+    <span id="userName"></span>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">INVENTORY</p>
+      <h1>Stock Management</h1>
+      <p class="subtitle">Manage product stock levels, pricing, and variants in real-time.</p>
+    </div>
+    <div class="hero-actions">
+      <div class="hero-chip">
+        <span>Real-time</span>
+        <strong>Stock Updates</strong>
+      </div>
+    </div>
+  </header>
+
+  <!-- Low Stock Alert Banner (hidden by default) -->
+  <div id="lowStockBanner" class="low-stock-banner" style="display: none;">
+    <span class="icon">⚠️</span>
+    <div>
+      <h3>Low Stock Alert</h3>
+      <p id="lowStockText">Some products are running low on inventory.</p>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="inventory-stats">
+    <div class="stat-card">
+      <h3>Total Products</h3>
+      <p class="value" id="totalProducts">-</p>
+    </div>
+    <div class="stat-card">
+      <h3>Total Variants</h3>
+      <p class="value" id="totalVariants">-</p>
+    </div>
+    <div class="stat-card">
+      <h3>Total Stock Value</h3>
+      <p class="value" id="stockValue">-</p>
+    </div>
+    <div class="stat-card low-stock" id="lowStockCard" style="display: none;">
+      <h3>Low Stock Items</h3>
+      <p class="value" id="lowStockCount">-</p>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="inventory-toolbar">
+    <div class="inventory-search">
+      <input type="text" id="searchInput" placeholder="Search products by name...">
+    </div>
+    <select class="operation-select" id="searchType">
+      <option value="name">Search by Name</option>
+      <option value="model_no">Search by Model No</option>
+    </select>
+    <button class="btn-secondary" id="refreshBtn">🔄 Refresh</button>
+    <button class="btn-secondary" id="lowStockFilterBtn">⚠️ Low Stock</button>
+    <select class="operation-select" id="thresholdSelect">
+      <option value="10">Threshold: 10</option>
+      <option value="20">Threshold: 20</option>
+      <option value="50">Threshold: 50</option>
+    </select>
+  </div>
+
+  <!-- Inventory Table -->
+  <div class="inventory-table-wrapper">
+    <table class="inventory-table">
+      <thead>
+        <tr>
+          <th style="width: 40px;"></th>
+          <th>Product</th>
+          <th style="width: 120px;">Base Price</th>
+          <th style="width: 100px;">Base Stock</th>
+          <th style="width: 100px;">Variants</th>
+          <th style="width: 150px;">Status</th>
+          <th style="width: 100px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="inventoryTableBody">
+        <tr>
+          <td colspan="7" class="loading-cell">Loading inventory...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="product-pagination" id="pagination">
+    <button type="button" class="btn-secondary" id="prevPage" disabled>←</button>
+    <span id="pageInfo" class="meta">Page 1 of 1</span>
+    <button type="button" class="btn-secondary" id="nextPage" disabled>→</button>
+  </div>
+</div>
+
+<script src="auth-config.js"></script>
+<script src="inventory.js"></script>
+<script>
+  // Protect route - admin and inventory_manager can access
+  protectRoute('admin', 'staff');
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    initRBAC();
+    renderMenu('navMenu');
+    
+    const user = getAdminUser();
+    if (user) {
+      const roleInfo = getRoleInfo(user.role);
+      const roleBadge = document.getElementById('userRoleBadge');
+      if (roleBadge) {
+        roleBadge.textContent = roleInfo.label;
+        roleBadge.style.background = roleInfo.color + '20';
+        roleBadge.style.color = roleInfo.color;
+      }
+      
+      const userName = document.getElementById('userName');
+      if (userName) {
+        userName.textContent = user.email;
+      }
+    }
+  });
+</script>
+</body>
+</html>
