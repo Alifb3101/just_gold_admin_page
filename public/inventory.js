@@ -128,7 +128,7 @@ async function loadInventory() {
   try {
     const tbody = document.getElementById('inventoryTableBody');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">Loading inventory...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="loading-cell">Loading inventory...</td></tr>';
     }
 
     const response = await fetch(
@@ -275,7 +275,7 @@ function renderTable() {
   if (!tbody) return;
 
   if (filteredProducts.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">No products found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="loading-cell">No products found</td></tr>';
     return;
   }
 
@@ -311,6 +311,9 @@ function renderProductRow(product) {
           </div>
         </div>
       </td>
+      <td>
+        <span class="model-no">${escapeHtml(product.product_model_no || '-')}</span>
+      </td>
       <td class="price-cell" data-product-id="${product.product_id}">
         <div class="price-display">
           <span class="current-price">AED ${parseFloat(product.base_price).toFixed(2)}</span>
@@ -334,7 +337,7 @@ function renderProductRow(product) {
       </td>
     </tr>
     <tr class="variants-row" id="variants-${product.product_id}" style="display: none;">
-      <td colspan="7">
+      <td colspan="8">
         <div class="variants-container">
           ${renderVariants(product.variants, product.product_id)}
         </div>
@@ -600,6 +603,9 @@ async function saveProduct(productId) {
   let stockUpdated = false;
   let newBasePrice = oldBasePrice;
 
+  // Show loader
+  showSaveLoader('Updating price...');
+
   if (priceInput) {
     const price = parseFloat(priceInput.value);
     if (!isNaN(price) && price >= 0) {
@@ -618,6 +624,7 @@ async function saveProduct(productId) {
         newBasePrice = price;
       } catch (error) {
         console.error('Update price error:', error);
+        hideSaveLoader();
         showError('Failed to update price');
         return;
       }
@@ -626,6 +633,7 @@ async function saveProduct(productId) {
 
   // Only update stock if no variants exist
   if (stockInput && !hasVariants) {
+    updateSaveLoader('Updating stock...');
     const stock = parseInt(stockInput.value);
     if (!isNaN(stock) && stock >= 0) {
       try {
@@ -642,22 +650,33 @@ async function saveProduct(productId) {
         stockUpdated = true;
       } catch (error) {
         console.error('Update stock error:', error);
+        hideSaveLoader();
         showError('Failed to update stock');
         return;
       }
     }
   }
   
-  // If base price changed and product has variants, update all variant prices proportionally
-  if (priceUpdated && hasVariants && newBasePrice !== oldBasePrice && oldBasePrice > 0) {
-    const priceRatio = newBasePrice / oldBasePrice;
+  // If base price changed and product has variants, update all variant prices
+  // Logic: preserve discount percentage, set variant discount_price = new base price, calculate original price from discount %
+  if (priceUpdated && hasVariants && newBasePrice !== oldBasePrice) {
+    updateSaveLoader('Updating variant prices...');
     
     for (const variant of product.variants) {
-      const newVariantPrice = parseFloat((variant.price * priceRatio).toFixed(2));
+      let newVariantPrice;
       let newVariantDiscount = null;
       
-      if (variant.discount_price) {
-        newVariantDiscount = parseFloat((variant.discount_price * priceRatio).toFixed(2));
+      if (variant.discount_price && variant.price > 0) {
+        // Variant has discount: preserve discount percentage
+        // discount_ratio = discount_price / original_price (e.g. 30/60 = 0.5 means 50% discount)
+        const discountRatio = variant.discount_price / variant.price;
+        // New discount_price = new base price
+        newVariantDiscount = newBasePrice;
+        // New original_price = new_base_price / discount_ratio (e.g. 50/0.5 = 100)
+        newVariantPrice = parseFloat((newBasePrice / discountRatio).toFixed(2));
+      } else {
+        // No discount: variant price = new base price
+        newVariantPrice = newBasePrice;
       }
       
       try {
@@ -688,6 +707,7 @@ async function saveProduct(productId) {
     }
     
     // Reload inventory to show updated variant prices
+    updateSaveLoader('Refreshing inventory...');
     await loadInventory();
   }
 
@@ -717,6 +737,7 @@ async function saveProduct(productId) {
 
   // Exit edit mode without re-rendering
   cancelEdit();
+  hideSaveLoader();
   showSuccess('Product updated successfully');
 }
 
@@ -732,6 +753,9 @@ async function saveVariant(variantId) {
   let priceUpdated = false;
   let discountUpdated = false;
   let stockUpdated = false;
+
+  // Show loader
+  showSaveLoader('Updating variant price...');
 
   // Update price if changed
   if (priceInput) {
@@ -751,6 +775,7 @@ async function saveVariant(variantId) {
         priceUpdated = true;
       } catch (error) {
         console.error('Update variant price error:', error);
+        hideSaveLoader();
         showError('Failed to update variant price');
         return;
       }
@@ -759,6 +784,7 @@ async function saveVariant(variantId) {
 
   // Update discount price if changed
   if (discountInput) {
+    updateSaveLoader('Updating discount...');
     const discountPrice = parseFloat(discountInput.value);
     if (!isNaN(discountPrice) && discountPrice >= 0) {
       try {
@@ -775,6 +801,7 @@ async function saveVariant(variantId) {
         discountUpdated = true;
       } catch (error) {
         console.error('Update variant discount price error:', error);
+        hideSaveLoader();
         showError('Failed to update variant discount price');
         return;
       }
@@ -783,6 +810,7 @@ async function saveVariant(variantId) {
 
   // Update stock
   if (stockInput && opSelect) {
+    updateSaveLoader('Updating stock...');
     const stock = parseInt(stockInput.value);
     const operation = opSelect.value;
     
@@ -801,6 +829,7 @@ async function saveVariant(variantId) {
         stockUpdated = true;
       } catch (error) {
         console.error('Update variant stock error:', error);
+        hideSaveLoader();
         showError('Failed to update variant stock');
         return;
       }
@@ -859,6 +888,7 @@ async function saveVariant(variantId) {
 
   // Exit edit mode without re-rendering
   cancelEdit();
+  hideSaveLoader();
   showSuccess('Variant updated successfully');
 }
 
@@ -880,6 +910,25 @@ function showError(message) {
 function showSuccess(message) {
   // Simple alert for now - could be replaced with a toast notification
   alert(message);
+}
+
+function showSaveLoader(text) {
+  const loader = document.getElementById('saveLoader');
+  const loaderText = document.getElementById('saveLoaderText');
+  if (loader) {
+    if (loaderText) loaderText.textContent = text || 'Saving changes...';
+    loader.style.display = 'flex';
+  }
+}
+
+function updateSaveLoader(text) {
+  const loaderText = document.getElementById('saveLoaderText');
+  if (loaderText) loaderText.textContent = text;
+}
+
+function hideSaveLoader() {
+  const loader = document.getElementById('saveLoader');
+  if (loader) loader.style.display = 'none';
 }
 
 function escapeHtml(text) {

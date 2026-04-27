@@ -167,6 +167,13 @@
       color: var(--muted);
     }
 
+    .model-no {
+      font-size: 0.85rem;
+      color: var(--ink);
+      font-weight: 500;
+      font-family: 'Space Grotesk', monospace;
+    }
+
     .variant-badge {
       display: inline-flex;
       align-items: center;
@@ -483,6 +490,70 @@
         flex-wrap: wrap;
       }
     }
+
+    /* Save Loader Overlay */
+    .save-loader-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .save-loader-content {
+      background: white;
+      border-radius: 16px;
+      padding: 32px 48px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .save-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #f0e6d6;
+      border-top: 4px solid #c7772c;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .save-loader-text {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1rem;
+      color: #333;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .save-loader-subtext {
+      font-size: 0.85rem;
+      color: #888;
+      margin: 8px 0 0;
+    }
   </style>
 </head>
 <body>
@@ -570,6 +641,7 @@
         <tr>
           <th style="width: 40px;"></th>
           <th>Product</th>
+          <th style="width: 140px;">Model No</th>
           <th style="width: 120px;">Base Price</th>
           <th style="width: 100px;">Base Stock</th>
           <th style="width: 100px;">Variants</th>
@@ -579,7 +651,7 @@
       </thead>
       <tbody id="inventoryTableBody">
         <tr>
-          <td colspan="7" class="loading-cell">Loading inventory...</td>
+          <td colspan="8" class="loading-cell">Loading inventory...</td>
         </tr>
       </tbody>
     </table>
@@ -590,6 +662,14 @@
     <button type="button" class="btn-secondary" id="prevPage" disabled>←</button>
     <span id="pageInfo" class="meta">Page 1 of 1</span>
     <button type="button" class="btn-secondary" id="nextPage" disabled>→</button>
+  </div>
+</div>
+
+<!-- Save Loader Overlay -->
+<div class="save-loader-overlay" id="saveLoader" style="display: none;">
+  <div class="save-loader-content">
+    <div class="save-spinner"></div>
+    <p class="save-loader-text" id="saveLoaderText">Saving changes...</p>
   </div>
 </div>
 
