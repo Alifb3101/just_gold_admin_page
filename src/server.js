@@ -13,6 +13,8 @@ app.use("/api/v1", require("./routes/product.routes"));
 app.use("/api/v1", require("./routes/orders.routes"));
 app.use("/api/v1", require("./routes/admin.routes"));
 app.use("/api/v1", require("./routes/auth.routes"));
+app.use("/api", require("./routes/transactional-email.routes"));
+app.use("/api/v1", require("./routes/transactional-email.routes"));
 
 // Static folders
 app.use(express.static(path.join(__dirname, "../public")));
