@@ -91,6 +91,7 @@ const MODULE_PERMISSIONS = {
 const MENU_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊', path: '/index.html', roles: ['admin'] },
   { id: 'products', label: 'Products', icon: '📦', path: '/index.html', roles: ['admin'] },
+  { id: 'create_product', label: 'New Product', icon: '➕', path: '/create-product.html', roles: ['admin'] },
   { id: 'inventory', label: 'Inventory', icon: '📋', path: '/inventory.html', roles: ['admin', 'staff'] },
   { id: 'orders', label: 'Orders', icon: '🛒', path: '/orders.html', roles: ['admin'] },
   { id: 'contact_queries', label: 'Contact Queries', icon: '✉️', path: '/contact-queries.html', roles: ['admin'] },

@@ -217,7 +217,11 @@ function renderOrderDetail(order) {
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <button class="btn btn-primary" onclick="updateOrderStatus('${order.id}')">Update</button>
+        <button class="btn btn-primary" id="updateStatusBtn" onclick="updateOrderStatus('${order.id}')">Update</button>
+        <div id="statusLoading" class="loading-indicator" style="display: none;">
+          <span class="spinner"></span>
+          <span>Updating status...</span>
+        </div>
       </div>
 
       <div class="status-update">
@@ -228,7 +232,11 @@ function renderOrderDetail(order) {
           <option value="failed">Failed</option>
           <option value="refunded">Refunded</option>
         </select>
-        <button class="btn btn-primary" onclick="updatePaymentStatus('${order.id}')">Update Payment</button>
+        <button class="btn btn-primary" id="updatePaymentStatusBtn" onclick="updatePaymentStatus('${order.id}')">Update Payment</button>
+        <div id="paymentLoading" class="loading-indicator" style="display: none;">
+          <span class="spinner"></span>
+          <span>Updating payment status...</span>
+        </div>
       </div>
     </div>
 
@@ -335,6 +343,14 @@ async function updateOrderStatus(orderId) {
     return;
   }
 
+  const updateBtn = document.getElementById('updateStatusBtn');
+  const loadingDiv = document.getElementById('statusLoading');
+  
+  // Show loading state
+  updateBtn.disabled = true;
+  updateBtn.style.display = 'none';
+  loadingDiv.style.display = 'flex';
+
   try {
     const response = await fetchWithAuth(`/orders/admin/${orderId}/status`, {
       method: 'PATCH',
@@ -354,7 +370,12 @@ async function updateOrderStatus(orderId) {
 
   } catch (error) {
     console.error('Error updating status:', error);
-    alert('Error updating order status');
+    alert('Error updating order status: ' + error.message);
+  } finally {
+    // Hide loading state
+    updateBtn.disabled = false;
+    updateBtn.style.display = 'block';
+    loadingDiv.style.display = 'none';
   }
 }
 
@@ -364,6 +385,14 @@ async function updatePaymentStatus(orderId) {
     alert('Please select a payment status');
     return;
   }
+
+  const updateBtn = document.getElementById('updatePaymentStatusBtn');
+  const loadingDiv = document.getElementById('paymentLoading');
+  
+  // Show loading state
+  updateBtn.disabled = true;
+  updateBtn.style.display = 'none';
+  loadingDiv.style.display = 'flex';
 
   try {
     const response = await fetchWithAuth(`/orders/admin/${orderId}/payment-status`, {
@@ -384,7 +413,12 @@ async function updatePaymentStatus(orderId) {
     loadOrders();
   } catch (error) {
     console.error('Error updating payment status:', error);
-    alert('Error updating payment status');
+    alert('Error updating payment status: ' + error.message);
+  } finally {
+    // Hide loading state
+    updateBtn.disabled = false;
+    updateBtn.style.display = 'block';
+    loadingDiv.style.display = 'none';
   }
 }
 

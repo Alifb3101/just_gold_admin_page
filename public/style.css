@@ -29,10 +29,6 @@ body {
 .hero {
   display: flex;
   flex-wrap: wrap;
-
-.modal.small-modal {
-  max-width: 640px;
-}
   gap: 24px;
   justify-content: space-between;
   align-items: center;
@@ -65,28 +61,6 @@ body {
   background: var(--ink);
   color: #fff6ea;
   padding: 16px 20px;
-.quick-variant {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  padding: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  background: #fffdf8;
-  position: relative;
-}
-
-.quick-variant .remove-quick {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  border: none;
-  background: #f8e1d1;
-  color: var(--accent-dark);
-  border-radius: 8px;
-  padding: 6px 8px;
-  cursor: pointer;
-}
   border-radius: 14px;
   display: grid;
   gap: 4px;
@@ -177,7 +151,7 @@ body {
   color: var(--muted);
   font-size: 0.85rem;
 }
-
+  width: min(90vw, 980px);
 .field {
   display: grid;
   gap: 8px;
@@ -318,6 +292,29 @@ textarea {
   background: #fffdf8;
 }
 
+.quick-variant {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: #fffdf8;
+  position: relative;
+}
+
+.quick-variant .remove-quick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: #f8e1d1;
+  color: var(--accent-dark);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
 .variant button {
   border: none;
   background: #f3dfc8;
@@ -349,20 +346,47 @@ textarea {
 }
 
 .variant-image-preview {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 60px;
-  border-radius: 10px;
-  background: #fdfbf7;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   position: relative;
+  overflow: visible;
+  padding: 0;
 }
 
 .variant-image-preview img {
-  max-width: 100%;
-  max-height: 100px;
-  border-radius: 8px;
-  object-fit: cover;
+  width: auto !important;
+  height: auto !important;
+  max-width: 72px !important;
+  max-height: 72px !important;
+  border-radius: 0;
+  object-fit: contain !important;
+  display: block;
+}
+
+.variant-image-preview .remove-img {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #F0D0CC;
+  background: #FEF2F2;
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.variant-image-preview .remove-img::after {
+  content: 'Remove';
+  color: #B03030;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .color-panel-fields {

@@ -1,0 +1,46 @@
+:root {
+  --create-hero-gradient: radial-gradient(circle at top left, rgba(252, 224, 186, 0.9), rgba(248, 210, 160, 0.3)),
+    linear-gradient(135deg, rgba(250, 242, 232, 0.92), rgba(243, 222, 197, 0.75));
+}
+
+.create-product-page {
+  background: linear-gradient(180deg, rgba(255, 250, 244, 0.96), rgba(248, 239, 227, 0.9));
+}
+
+.create-product-page.page {
+  max-width: 1320px;
+}
+
+.create-hero {
+  background: var(--create-hero-gradient);
+  border-radius: 24px;
+  margin-bottom: 28px;
+  box-shadow: 0 24px 60px rgba(82, 56, 33, 0.15);
+}
+
+.create-product-page .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+.create-product-page .panel {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.create-product-page .panel-section {
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(31, 28, 24, 0.08);
+}
+
+.create-product-page .panel-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .create-product-page .panel {
+    max-width: 100%;
+  }
+}

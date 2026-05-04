@@ -580,29 +580,44 @@ if (categorySelectEl) {
    LOAD PRODUCTS
 ========================= */
 
-async function fetchProductsPage(page, limit) {
-  const params = new URLSearchParams({ page, limit });
-  console.log(`🔄 Fetching products page ${page} (limit: ${limit})`);
-  
+async function fetchProductsPage(page, limit, cursor = null) {
+  const params = new URLSearchParams({ limit });
+  if (cursor !== null && cursor !== undefined && cursor !== '') {
+    params.set('cursor', cursor);
+  } else {
+    params.set('page', page);
+  }
+
+  console.log(`🔄 Fetching products (page: ${page}, cursor: ${cursor || 'none'}, limit: ${limit})`);
+
   const res = await fetchWithAuth(`/products?${params.toString()}`);
   if (!res) {
     throw new Error('Authentication failed');
   }
-  
+
   const data = await res.json();
-  console.log(`  ✅ Got ${data.products ? data.products.length : 0} products, total_pages: ${data.total_pages}`);
-  
-  return data;
+  const products = Array.isArray(data.products)
+    ? data.products
+    : (Array.isArray(data.data) ? data.data : []);
+  const pagination = data.pagination || {};
+  const totalPages = Number(data.total_pages || pagination.total_pages || 0);
+  const nextCursor = pagination.nextCursor ?? data.nextCursor ?? null;
+  const hasMore = pagination.hasMore ?? false;
+
+  console.log(`  ✅ Got ${products.length} products, total_pages: ${totalPages || 'n/a'}, nextCursor: ${nextCursor ?? 'n/a'}`);
+
+  return { products, total_pages: totalPages, nextCursor, hasMore };
 }
 
 async function fetchAllProducts() {
   const productsById = new Map();
   let page = 1;
   let guard = 0;
+  let cursor = null;
   const maxPages = 100;
 
   while (guard < maxPages) {
-    const data = await fetchProductsPage(page, PRODUCTS_PER_PAGE);
+    const data = await fetchProductsPage(page, PRODUCTS_PER_PAGE, cursor);
     const products = Array.isArray(data.products) ? data.products : [];
     const reportedTotalPages = Number(data.total_pages) || 0;
 
@@ -611,13 +626,18 @@ async function fetchAllProducts() {
     });
 
     const hasMoreFromTotal = reportedTotalPages > 0 ? page < reportedTotalPages : false;
+    const hasMoreFromCursor = Boolean(data.nextCursor) && (data.hasMore === true);
     const hasMoreFromPage = products.length === PRODUCTS_PER_PAGE;
 
-    if (!hasMoreFromTotal && !hasMoreFromPage) {
+    if (hasMoreFromCursor) {
+      cursor = data.nextCursor;
+    } else if (hasMoreFromTotal || hasMoreFromPage) {
+      cursor = null;
+      page += 1;
+    } else {
       break;
     }
 
-    page += 1;
     guard += 1;
   }
 
@@ -830,11 +850,20 @@ function renderGallery() {
   selectedImages.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "preview-tile";
+    tile.style.width = "72px";
+    tile.style.height = "72px";
+    tile.style.flex = "0 0 72px";
+    tile.style.overflow = "hidden";
+    tile.style.borderRadius = "8px";
 
     const img = document.createElement("img");
     const url = URL.createObjectURL(item.file);
     img.src = url;
     img.onload = () => URL.revokeObjectURL(url);
+    img.style.width = "100%";
+    img.style.height = "100%";
+    img.style.objectFit = "cover";
+    img.style.display = "block";
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
@@ -2078,16 +2107,29 @@ function updateEditGalleryCounter() {
 }
 
 function renderEditGalleryPreview() {
+  if (!editGalleryPreview) {
+    return;
+  }
+
   editGalleryPreview.innerHTML = "";
 
   editSelectedImages.forEach((item, index) => {
     const tile = document.createElement("div");
     tile.className = "preview-tile";
+    tile.style.width = "72px";
+    tile.style.height = "72px";
+    tile.style.flex = "0 0 72px";
+    tile.style.overflow = "hidden";
+    tile.style.borderRadius = "8px";
 
     const img = document.createElement("img");
     const url = URL.createObjectURL(item.file);
     img.src = url;
     img.onload = () => URL.revokeObjectURL(url);
+    img.style.width = "100%";
+    img.style.height = "100%";
+    img.style.objectFit = "cover";
+    img.style.display = "block";
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
@@ -2104,26 +2146,29 @@ function renderEditGalleryPreview() {
   });
 }
 
-editGalleryInput.addEventListener("change", () => {
-  const files = Array.from(editGalleryInput.files || []);
-  const existingKeys = new Set(editSelectedImages.map(item => item.key));
+if (editGalleryInput) {
+  editGalleryInput.addEventListener("change", () => {
+    const files = Array.from(editGalleryInput.files || []);
+    const existingKeys = new Set(editSelectedImages.map(item => item.key));
 
-  files.forEach(file => {
-    const key = getFileKey(file);
-    if (!existingKeys.has(key)) {
-      editSelectedImages.push({ file, key });
-      existingKeys.add(key);
-    }
+    files.forEach(file => {
+      const key = getFileKey(file);
+      if (!existingKeys.has(key)) {
+        editSelectedImages.push({ file, key });
+        existingKeys.add(key);
+      }
+    });
+
+    editGalleryInput.value = "";
+    renderEditGalleryPreview();
+    updateEditGalleryCounter();
   });
-
-  editGalleryInput.value = "";
-  renderEditGalleryPreview();
-  updateEditGalleryCounter();
-});
+}
 
 // Edit form submission
-document.getElementById("editProductForm")
-  .addEventListener("submit", async (e) => {
+const editProductForm = document.getElementById("editProductForm");
+if (editProductForm) {
+  editProductForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const formData = new FormData();
@@ -2289,6 +2334,7 @@ document.getElementById("editProductForm")
       setButtonLoading(saveBtn, false);
     }
   });
+}
 
 // Quick add variant form (from product list)
 const quickVariantForm = document.getElementById("quickVariantForm");

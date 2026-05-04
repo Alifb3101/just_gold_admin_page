@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Product | Just Gold Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════════════
+       JUST GOLD ADMIN — CREATE PRODUCT  (self-contained)
+    ═══════════════════════════════════════════════════════════ */
+    :root {
+      --gold:       #C9A84C;
+      --gold-lt:    #E2BE6A;
+      --gold-dk:    #9D7A2E;
+      --gold-wash:  #F6EDD6;
+      --gold-pale:  #FDFAF2;
+      --ink:        #18120A;
+      --ink-2:      #3C3024;
+      --ink-3:      #7B6E5E;
+      --ink-4:      #B0A396;
+      --surface:    #FFFFFF;
+      --bg:         #F2EDE3;
+      --border:     #DDD3BF;
+      --r:          12px;
+      --r-sm:       8px;
+      --fh:         'Unbounded', sans-serif;
+      --fb:         'DM Sans', sans-serif;
+      --nav-h:      58px;
+      --card-sh:    0 1px 4px rgba(24,18,10,.06), 0 0 0 1px rgba(24,18,10,.07);
+      --preview-size: 72px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--fb);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── FORCE VISIBLE (override any role-gating) ── */
+    .page, main, .layout, .layout.single-panel,
+    .panel, section.panel, [data-role] {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    .layout.single-panel { display: flex !important; flex-direction: column !important; }
+    .panel               { display: flex  !important; flex-direction: column !important; }
+
+    /* ══ NAV ══════════════════════════════════════════════════ */
+    .admin-nav {
+      position: sticky; top: 0; z-index: 300;
+      height: var(--nav-h);
+      display: flex; align-items: center; gap: 6px;
+      padding: 0 24px;
+      background: #14100A;
+      border-bottom: 1px solid rgba(201,168,76,.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    }
+
+    .nav-brand {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--fh); font-size: 11px; font-weight: 700;
+      color: var(--gold-lt); letter-spacing: .05em; white-space: nowrap;
+      margin-right: 12px;
+    }
+    .nav-logo { font-size: 20px; }
+
+    .nav-menu {
+      display: flex; align-items: center; gap: 1px;
+      flex: 1; overflow-x: auto; scrollbar-width: none;
+    }
+    .nav-menu::-webkit-scrollbar { display: none; }
+
+    .nav-menu a {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 6px;
+      font-size: 12.5px; font-weight: 500;
+      color: rgba(255,255,255,.5); text-decoration: none;
+      white-space: nowrap; transition: color .15s, background .15s;
+    }
+    .nav-menu a:hover { color: var(--gold-lt); background: rgba(201,168,76,.09); }
+    .nav-menu a.active { color: var(--gold-lt); background: rgba(201,168,76,.13); font-weight: 600; }
+
+    .nav-user { display: flex; align-items: center; gap: 9px; margin-left: auto; }
+
+    .user-role {
+      padding: 2px 10px; border-radius: 99px;
+      font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      background: rgba(201,168,76,.15); color: var(--gold-lt);
+    }
+    #userName { font-size: 12px; color: rgba(255,255,255,.4); }
+
+    .logout-btn {
+      padding: 5px 13px;
+      background: rgba(201,168,76,.1); border: 1px solid rgba(201,168,76,.22);
+      border-radius: 6px; color: var(--gold-lt);
+      font-family: var(--fb); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    .logout-btn:hover { background: rgba(201,168,76,.2); }
+
+    /* ══ PAGE ═════════════════════════════════════════════════ */
+    .create-product-page { max-width: 880px; margin: 0 auto; padding: 28px 20px 90px; }
+
+    /* ══ HERO ═════════════════════════════════════════════════ */
+    .create-hero {
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      padding: 36px 44px;
+      background: linear-gradient(125deg, #1D1509 0%, #110D07 55%, #090604 100%);
+      border-radius: 18px; border: 1px solid rgba(201,168,76,.15);
+      box-shadow: 0 8px 40px rgba(0,0,0,.22);
+      margin-bottom: 24px; position: relative; overflow: hidden;
+    }
+    .create-hero::before {
+      content: '';
+      position: absolute; right: -40px; top: -40px;
+      width: 260px; height: 260px;
+      background: radial-gradient(circle, rgba(201,168,76,.09) 0%, transparent 68%);
+      pointer-events: none;
+    }
+
+    .hero-text { position: relative; z-index: 1; }
+
+    .eyebrow {
+      font-family: var(--fh); font-size: 8.5px; font-weight: 700;
+      letter-spacing: .25em; color: var(--gold); margin-bottom: 10px;
+    }
+    .create-hero h1 {
+      font-family: var(--fh); font-size: clamp(24px, 3vw, 38px); font-weight: 700;
+      color: #fff; line-height: 1.1; margin-bottom: 10px;
+    }
+    .create-hero .subtitle { font-size: 13px; color: rgba(255,255,255,.38); max-width: 320px; }
+
+    .hero-actions {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+      flex-shrink: 0; position: relative; z-index: 1;
+    }
+    .nav-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 7px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.09);
+      color: rgba(255,255,255,.65); font-family: var(--fb); font-size: 12.5px;
+      font-weight: 500; text-decoration: none; transition: background .15s, color .15s;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,.11); color: #fff; }
+
+    .hero-chip {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+      padding: 12px 18px; background: var(--gold); border-radius: 10px;
+    }
+    .hero-chip span { font-size: 8.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgba(24,18,10,.6); }
+    .hero-chip strong { font-family: var(--fh); font-size: 11px; font-weight: 700; color: var(--ink); }
+
+    /* ══ CARD SECTION ═════════════════════════════════════════ */
+    .panel-section {
+      background: var(--surface);
+      border-radius: var(--r); border: 1px solid var(--border);
+      padding: 26px 28px; margin-bottom: 16px;
+      box-shadow: var(--card-sh);
+    }
+
+    .sec-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--gold-wash);
+    }
+    .sec-title {
+      display: flex; align-items: center; gap: 9px;
+      font-family: var(--fh); font-size: 10.5px; font-weight: 700;
+      letter-spacing: .08em; color: var(--ink);
+    }
+    .sec-title::before {
+      content: '';
+      display: block; width: 3px; height: 16px;
+      background: linear-gradient(180deg, var(--gold-lt), var(--gold-dk));
+      border-radius: 2px; flex-shrink: 0;
+    }
+    .sec-badge {
+      padding: 2px 9px; border-radius: 99px;
+      background: var(--gold-wash); color: var(--gold-dk);
+      font-family: var(--fb); font-size: 10px; font-weight: 600;
+      letter-spacing: .03em;
+    }
+
+    /* ══ FORM FIELDS ══════════════════════════════════════════ */
+    .field {
+      display: flex; flex-direction: column; gap: 6px;
+      margin-bottom: 16px;
+    }
+    .field:last-child { margin-bottom: 0; }
+
+    .field > span {
+      font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--ink-3);
+    }
+
+    .field input[type="text"],
+    .field input[type="number"],
+    .field textarea,
+    .field select {
+      width: 100%;
+      padding: 10px 13px;
+      background: var(--gold-pale);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-family: var(--fb); font-size: 13.5px; color: var(--ink);
+      outline: none; appearance: none; -webkit-appearance: none;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      border-color: var(--gold);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(201,168,76,.12);
+    }
+    .field input::placeholder,
+    .field textarea::placeholder { color: var(--ink-4); }
+    .field textarea { resize: vertical; min-height: 80px; }
+    .field select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M.5.5l4.5 4.5L9.5.5' stroke='%237B6E5E' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      padding-right: 34px; cursor: pointer;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .grid-2 .field { margin-bottom: 0; }
+
+    .checkbox-field {
+      flex-direction: row !important; align-items: flex-start; gap: 11px;
+      padding: 13px 15px;
+      background: var(--gold-pale); border: 1.5px solid var(--border);
+      border-radius: var(--r-sm); cursor: pointer;
+      transition: border-color .15s;
+      margin-bottom: 14px;
+    }
+    .checkbox-field:hover { border-color: var(--gold); }
+    .checkbox-field input[type="checkbox"] {
+      width: 16px !important; height: 16px;
+      flex-shrink: 0; margin-top: 2px;
+      accent-color: var(--gold); cursor: pointer;
+    }
+    .checkbox-field > div > span {
+      font-size: 13px !important; font-weight: 600 !important;
+      color: var(--ink) !important; text-transform: none !important; letter-spacing: 0 !important;
+    }
+
+    .meta { font-size: 11.5px; color: var(--ink-3); line-height: 1.5; }
+
+    .status-line {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 13px; border-left: 3px solid var(--gold);
+      background: var(--gold-pale); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+      font-size: 11.5px; color: var(--ink-2); margin-top: 4px;
+    }
+
+    /* ══ UPLOAD AREA ══════════════════════════════════════════ */
+    .upload-area {
+      position: relative; display: flex; align-items: center; gap: 18px;
+      padding: 20px; border: 2px dashed #CFC4AE; border-radius: var(--r);
+      background: var(--gold-pale); cursor: pointer;
+      transition: border-color .2s, background .2s; margin-bottom: 14px;
+    }
+    .upload-area:hover { border-color: var(--gold); background: rgba(201,168,76,.04); }
+    .upload-area input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon {
+      width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--gold-wash), #E8D080);
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+    .upload-area h3 { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+    .upload-area p { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+    .counter {
+      display: inline-block; padding: 2px 9px; border-radius: 99px;
+      background: var(--gold-wash); color: var(--gold-dk);
+      font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    }
+
+    /* ══ GALLERY THUMBNAILS — small, neat grid ════════════════ */
+    #galleryPreview {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 18px; min-height: 0;
+    }
+    #galleryPreview .thumb {
+      position: relative; width: var(--preview-size); height: var(--preview-size); flex-shrink: 0;
+    }
+    #galleryPreview .thumb img {
+      width: var(--preview-size); height: var(--preview-size);
+      object-fit: cover; border-radius: 6px;
+      border: 2px solid var(--border); display: block;
+      transition: border-color .15s, transform .15s;
+    }
+    #galleryPreview .preview-tile {
+      position: relative; width: var(--preview-size); height: var(--preview-size); flex-shrink: 0;
+      border-radius: 8px; overflow: hidden; background: #fff;
+      border: 2px solid var(--border);
+    }
+    #galleryPreview .preview-tile img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    #galleryPreview .preview-tile button {
+      position: absolute; top: 4px; right: 4px;
+      padding: 2px 6px; border-radius: 8px; border: none;
+      background: rgba(0,0,0,.6); color: #fff;
+      font-size: 10px; line-height: 1; cursor: pointer;
+    }
+    #galleryPreview .thumb:hover img { border-color: var(--gold); transform: scale(1.04); }
+    #galleryPreview .thumb .tlabel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 2px 4px; border-radius: 0 0 5px 5px;
+      background: rgba(14,10,4,.6); font-size: 9px; color: #fff;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+    }
+
+    /* Video row */
+    .video-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; margin-top: 10px;
+      background: var(--gold-pale); border: 1.5px solid var(--border); border-radius: var(--r-sm);
+    }
+    .video-row input[type="file"] { flex: 1; font-family: var(--fb); font-size: 13px; }
+
+    /* ══ VARIANT BULK TOOLBAR ═════════════════════════════════ */
+    .variant-bulk-toolbar {
+      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+      padding: 14px 16px;
+      background: var(--gold-pale); border: 1px solid rgba(201,168,76,.22);
+      border-radius: var(--r-sm); margin-bottom: 14px;
+    }
+    .compact-field { flex: 1; min-width: 100px; margin-bottom: 0 !important; }
+    .compact-field > span { font-size: 9.5px !important; }
+    .compact-field input { padding: 8px 10px !important; font-size: 13px !important; }
+    .bulk-only-empty { padding: 8px 11px !important; min-width: 0 !important; flex: 0 0 auto; }
+
+    /* ══ VARIANT CARDS (styling for script.js-injected HTML) ══ */
+    #variants { display: flex; flex-direction: column; gap: 12px; }
+
+    .variant-image-preview {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
+      padding: 0;
+      position: relative;
+    }
+    .variant-image-preview img {
+      width: auto !important;
+      height: auto !important;
+      max-width: var(--preview-size) !important;
+      max-height: var(--preview-size) !important;
+      object-fit: contain !important;
+      display: block;
+      border-radius: 0;
+    }
+    .variant-image-preview .remove-img {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #F0D0CC;
+      background: #FEF2F2;
+      color: transparent;
+      font-size: 0;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .variant-image-preview .remove-img::after {
+      content: 'Remove';
+      color: #B03030;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    #variants > div {
+      background: var(--gold-pale);
+      border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      padding: 18px 20px; transition: border-color .2s, box-shadow .2s;
+    }
+    #variants > div:hover {
+      border-color: rgba(201,168,76,.5);
+      box-shadow: 0 2px 14px rgba(201,168,76,.1);
+    }
+
+    /* Every text/number/select/textarea inside a variant card */
+    #variants input[type="text"],
+    #variants input[type="number"],
+    #variants select,
+    #variants textarea {
+      width: 100%; padding: 9px 12px;
+      background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      font-family: var(--fb); font-size: 13px; color: var(--ink);
+      outline: none; appearance: none; -webkit-appearance: none;
+      transition: border-color .15s, box-shadow .15s;
+      margin-bottom: 10px; display: block;
+    }
+    #variants input[type="color"] {
+      width: 44px; height: 36px; padding: 3px 5px; cursor: pointer;
+      border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      background: #fff; margin-bottom: 10px; display: inline-block;
+    }
+    #variants input[type="file"] {
+      width: 100%; padding: 7px 10px; margin-bottom: 10px; display: block;
+      background: #fff; border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      font-family: var(--fb); font-size: 12.5px; cursor: pointer;
+    }
+    #variants input:focus,
+    #variants select:focus,
+    #variants textarea:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201,168,76,.12);
+      outline: none;
+    }
+    #variants input::placeholder,
+    #variants textarea::placeholder { color: var(--ink-4); }
+
+    /* Labels inside variants */
+    #variants label {
+      display: block;
+      font-size: 10px; font-weight: 600; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--ink-3);
+      margin-bottom: 5px; margin-top: 12px;
+    }
+    #variants label:first-of-type { margin-top: 0; }
+
+    /* Select arrow */
+    #variants select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M.5.5l4.5 4.5L9.5.5' stroke='%237B6E5E' stroke-width='1.3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 11px center;
+      padding-right: 30px; cursor: pointer;
+    }
+
+    /* Buttons inside variants (Remove, Detect, etc.) */
+    #variants button {
+      padding: 6px 13px; border-radius: var(--r-sm);
+      border: 1.5px solid var(--border); background: #fff;
+      color: var(--ink-2); font-family: var(--fb); font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+      white-space: nowrap; margin-bottom: 4px;
+    }
+    #variants button[onclick*="remove"],
+    #variants button[onclick*="Remove"],
+    #variants .remove-btn {
+      border-color: #F0D0CC; color: #B03030;
+    }
+    #variants button[onclick*="remove"]:hover,
+    #variants button[onclick*="Remove"]:hover,
+    #variants .remove-btn:hover { background: #FEF2F2; border-color: #E05050; }
+
+    #variants button[onclick*="detect"],
+    #variants button[onclick*="Detect"],
+    #variants .detect-btn {
+      border-color: var(--gold); color: var(--gold-dk); background: var(--gold-wash);
+    }
+    #variants button[onclick*="detect"]:hover,
+    #variants button[onclick*="Detect"]:hover,
+    #variants .detect-btn:hover { background: var(--gold); color: var(--ink); }
+
+    /* Inline flex rows inside variant cards */
+    #variants .row,
+    #variants .flex-row {
+      display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap;
+    }
+    #variants .row > *,
+    #variants .flex-row > * { flex: 1; min-width: 100px; }
+
+    /* ══ GLOBAL BUTTONS ═══════════════════════════════════════ */
+    button.ghost {
+      padding: 7px 15px;
+      background: transparent; border: 1.5px solid var(--gold);
+      border-radius: var(--r-sm); color: var(--gold-dk);
+      font-family: var(--fb); font-size: 12.5px; font-weight: 600;
+      cursor: pointer; transition: background .15s, color .15s;
+    }
+    button.ghost:hover { background: var(--gold); color: var(--ink); }
+
+    .btn-secondary {
+      padding: 8px 18px; background: var(--ink); border: none;
+      border-radius: var(--r-sm); color: var(--gold-lt);
+      font-family: var(--fb); font-size: 12.5px; font-weight: 600;
+      cursor: pointer; transition: background .15s; white-space: nowrap; align-self: flex-end;
+    }
+    .btn-secondary:hover { background: var(--ink-2); }
+
+    /* ══ SUBMIT ═══════════════════════════════════════════════ */
+    .actions { display: flex; justify-content: flex-end; padding-top: 4px; }
+
+    .submitBtn {
+      padding: 14px 44px;
+      background: linear-gradient(135deg, var(--gold-lt) 0%, var(--gold-dk) 100%);
+      border: none; border-radius: var(--r-sm); color: var(--ink);
+      font-family: var(--fh); font-size: 12px; font-weight: 700;
+      letter-spacing: .06em; cursor: pointer;
+      box-shadow: 0 4px 18px rgba(157,122,46,.32);
+      transition: transform .15s, box-shadow .15s;
+    }
+    .submitBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(157,122,46,.42); }
+    .submitBtn:active { transform: translateY(0); }
+
+    /* ══ RESPONSIVE ════════════════════════════════════════════ */
+    @media (max-width: 680px) {
+      .create-product-page { padding: 14px 12px 72px; }
+      .create-hero { flex-direction: column; padding: 24px 20px; }
+      .hero-actions { align-items: flex-start; width: 100%; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .panel-section { padding: 18px 14px; }
+      .variant-bulk-toolbar { flex-direction: column; }
+      .admin-nav { padding: 0 12px; }
+      .nav-menu, #userName { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ NAV ══════════════════════════════════════════════════ -->
+<nav class="admin-nav" id="adminNav">
+  <div class="nav-brand">
+    <span class="nav-logo">👑</span>
+    <span>Just Gold Admin</span>
+  </div>
+  <div class="nav-menu" id="navMenu">
+    <a href="index.html">Dashboard</a>
+    <a href="products.html">Products</a>
+    <a href="create-product.html" class="active">+ New Product</a>
+    <a href="inventory.html">Inventory</a>
+    <a href="orders.html">Orders</a>
+    <a href="contact-queries.html">Contact Queries</a>
+    <a href="user-management.html">User Management</a>
+    <a href="settings.html">Settings</a>
+  </div>
+  <div class="nav-user">
+    <span id="userRoleBadge" class="user-role">ADMIN</span>
+    <span id="userName">admin@gmail.com</span>
+    <button class="logout-btn" onclick="typeof logout==='function'?logout():(window.location.href='login.html')">Logout</button>
+  </div>
+</nav>
+
+<!-- ══ PAGE ══════════════════════════════════════════════════ */
+<div class="page create-product-page">
+
+  <!-- HERO -->
+  <header class="hero create-hero">
+    <div class="hero-text">
+      <p class="eyebrow">ADMIN</p>
+      <h1>Create Product</h1>
+      <p class="subtitle">Build new products with rich media and variants, then publish instantly.</p>
+    </div>
+    <div class="hero-actions">
+      <a href="index.html" class="nav-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+        </svg>
+        Back to Products
+      </a>
+      <div class="hero-chip">
+        <span>Media-ready</span>
+        <strong>Multi-image uploads</strong>
+      </div>
+    </div>
+  </header>
+
+  <!-- FORM -->
+  <main class="layout single-panel">
+    <section class="panel" data-role="admin">
+      <form id="productForm" enctype="multipart/form-data">
+
+        <!-- ① PRODUCT INFORMATION ──────────────────────────── -->
+        <div class="panel-section">
+          <div class="sec-head">
+            <span class="sec-title">Product Information</span>
+          </div>
+
+          <label class="field">
+            <span>Product Title</span>
+            <input type="text" name="name" placeholder="Gold Cascade Necklace" required>
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea name="description" placeholder="Describe materials, craftsmanship, and care."></textarea>
+          </label>
+
+          <label class="field">
+            <span>How to Apply</span>
+            <textarea name="how_to_apply" placeholder="Explain how to use or apply this product."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Benefits</span>
+            <textarea name="benefits" placeholder="List the key benefits."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Product Description (Highlights)</span>
+            <textarea name="product_description" placeholder="Highlight standout features."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Ingredients / Materials</span>
+            <textarea name="ingredients" placeholder="List ingredients or materials."></textarea>
+          </label>
+
+          <label class="field">
+            <span>Product Model No.</span>
+            <input type="text" name="product_model_no" placeholder="e.g., SKG-2026-001" required>
+          </label>
+
+          <div class="grid-2">
+            <label class="field">
+              <span>Base Price</span>
+              <input type="number" name="base_price" placeholder="0.00" step="0.01" required>
+            </label>
+            <label class="field">
+              <span>Base Stock</span>
+              <input type="number" name="base_stock" placeholder="0" min="0">
+            </label>
+            <label class="field">
+              <span>Category</span>
+              <select id="categorySelect" name="category_id">
+                <option value="" disabled selected>Loading…</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Subcategory</span>
+              <select name="subcategory_id" id="subcategorySelect">
+                <option value="" disabled selected>Select category first</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Tags (JSON)</span>
+            <textarea id="tagsInput" name="tags" placeholder='[{"type":"country","code":"DE"},{"type":"badge","code":"NEW"}]'></textarea>
+            <p class="meta">JSON array of tags (max 20). Types: <strong>country</strong> or <strong>badge</strong>. Codes: A–Z, 0–9, underscore, dash.</p>
+          </label>
+
+          <label class="field checkbox-field">
+            <input type="checkbox" id="bestSellerToggle">
+            <div>
+              <span>Also show in Best Seller</span>
+              <p class="meta">Sets subcategory_id to 3 and reuses the same media — no extra upload needed.</p>
+            </div>
+          </label>
+
+          <p id="categoryStatus" class="status-line meta">⏳ Loading categories…</p>
+        </div>
+
+        <!-- ② MEDIA STORAGE ─────────────────────────────────── -->
+        <div class="panel-section">
+          <div class="sec-head">
+            <span class="sec-title">Media Storage</span>
+          </div>
+          <label class="field">
+            <span>Media Provider</span>
+            <select name="media_provider" id="mediaProvider">
+              <option value="" selected disabled>Select media provider</option>
+              <option value="cloudinary">Cloudinary</option>
+              <option value="aws_s3">AWS S3</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- ③ GALLERY ────────────────────────────────────────── -->
+        <div class="panel-section">
+          <div class="sec-head">
+            <span class="sec-title">Gallery <span class="sec-badge">Max 6 images</span></span>
+          </div>
+
+          <div class="upload-area">
+            <input type="file" name="gallery" id="galleryInput" multiple accept="image/*">
+            <div class="upload-icon">📷</div>
+            <div>
+              <h3>Drop or select images</h3>
+              <p>High-res photos look best. Reorder after upload.</p>
+              <span id="galleryCounter" class="counter">0 / 6 selected</span>
+            </div>
+          </div>
+
+          <!-- Thumbnail strip — images stay small -->
+          <div id="galleryPreview"></div>
+
+          <!-- Video -->
+          <div class="sec-head" style="margin-top:20px; padding-top:18px; border-top:1px solid var(--gold-wash);">
+            <span class="sec-title">Product Video <span class="sec-badge">MP4, optional</span></span>
+          </div>
+          <div class="video-row">
+            <input type="file" name="video" id="videoInput" accept="video/mp4">
+          </div>
+          <p id="videoMeta" class="meta" style="margin-top:6px;"></p>
+        </div>
+
+        <!-- ④ COLOR VARIANTS ────────────────────────────────── -->
+        <div class="panel-section">
+          <div class="sec-head">
+            <span class="sec-title">Color Variants</span>
+            <button type="button" class="ghost" onclick="typeof addVariant==='function'&&addVariant()">+ Add Color</button>
+          </div>
+
+          <div class="variant-bulk-toolbar" id="createVariantBulkTools">
+            <label class="field compact-field">
+              <span>Stock for all</span>
+              <input type="number" id="bulkStock" placeholder="e.g. 50">
+            </label>
+            <label class="field compact-field">
+              <span>Price for all</span>
+              <input type="number" id="bulkPrice" placeholder="e.g. 99.00" step="0.01">
+            </label>
+            <label class="field compact-field">
+              <span>Discount for all</span>
+              <input type="number" id="bulkDiscount" placeholder="e.g. 79.00" step="0.01">
+            </label>
+            <label class="field checkbox-field bulk-only-empty">
+              <input type="checkbox" id="bulkOnlyEmpty">
+              <div><span>Only fill empty fields</span></div>
+            </label>
+            <button type="button" class="btn-secondary" id="applyBulkCreateVariants">Apply To All Variants</button>
+          </div>
+
+          <div id="variants"></div>
+        </div>
+
+        <!-- SUBMIT -->
+        <div class="actions">
+          <button type="submit" class="submitBtn">✦ Create Product</button>
+        </div>
+
+      </form>
+    </section>
+  </main>
+</div>
+
+<!-- ══ SCRIPTS ══════════════════════════════════════════════ -->
+<script>
+  /* Safe stubs — page renders without external JS */
+  function protectRoute(r){ console.info('[stub] protectRoute:',r); }
+  function initRBAC(){}
+  function renderMenu(){}
+  function getAdminUser(){
+    try{ return JSON.parse(localStorage.getItem('adminUser'))||null; }catch{ return null; }
+  }
+  function getRoleInfo(role){
+    const m={admin:{label:'ADMINISTRATOR',color:'#C9A84C'},manager:{label:'MANAGER',color:'#3B82F6'},viewer:{label:'VIEWER',color:'#10B981'}};
+    return m[role]||{label:(role||'').toUpperCase(),color:'#7B6E5E'};
+  }
+  function hasPermission(){ return true; }
+  function logout(){ localStorage.removeItem('adminUser'); window.location.href='login.html'; }
+  function addVariant(){ console.info('[stub] addVariant — needs script.js'); }
+</script>
+
+<script src="auth-config.js" onerror="console.warn('auth-config.js not found — stubs active')"></script>
+
+<script>
+  protectRoute('admin');
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if(typeof initRBAC==='function') initRBAC();
+    if(typeof renderMenu==='function') renderMenu('navMenu');
+
+    /* Populate user info from RBAC */
+    const user = typeof getAdminUser==='function' ? getAdminUser() : null;
+    if(user){
+      const ri = typeof getRoleInfo==='function' ? getRoleInfo(user.role) : {label:user.role, color:'#C9A84C'};
+      const badge = document.getElementById('userRoleBadge');
+      if(badge){ badge.textContent=ri.label; badge.style.background=ri.color+'20'; badge.style.color=ri.color; }
+      const un = document.getElementById('userName');
+      if(un) un.textContent = user.email;
+    }
+
+    /* ── Video filename feedback ── */
+    const vInput = document.getElementById('videoInput');
+    const vMeta  = document.getElementById('videoMeta');
+    if(vInput){
+      vInput.addEventListener('change', () => {
+        const f = vInput.files[0];
+        if(f) vMeta.textContent = `✓ ${f.name}  (${(f.size/1024/1024).toFixed(1)} MB)`;
+      });
+    }
+  });
+</script>
+
+<!-- Your existing product + variant logic -->
+<script src="script.js" onerror="console.warn('script.js not found')"></script>
+
+</body>
+</html>

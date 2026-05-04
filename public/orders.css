@@ -340,3 +340,30 @@
 .status-update select {
   flex: 1;
 }
+
+/* Loading Indicator */
+.loading-indicator {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f0f7ff;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #0066cc;
+}
+
+.loading-indicator .spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top: 2px solid #0066cc;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
